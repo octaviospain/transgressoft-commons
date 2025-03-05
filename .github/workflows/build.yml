@@ -3,62 +3,65 @@ name: CI build
 on:
     pull_request:
         branches:
-            - master
+        - master
         types: [ opened, synchronize, reopened ]
 
     push:
         branches:
-            - master
+        - master
 
 jobs:
     build-and-analyze:
         runs-on: ubuntu-latest
 
         steps:
-            -   uses: actions/checkout@v4
-                with:
-                    fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+        -   uses: actions/checkout@v4
+            with:
+                fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
 
-            -   name: Setup Git Credentials
-                run: |
-                    git config --global user.email "github-actions@github.com"
-                    git config --global user.name "github-actions"
-                    git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
+        -   name: Setup Git Credentials
+            run: |
+                git config --global user.email "github-actions@github.com"
+                git config --global user.name "github-actions"
+                git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
 
-            -   name: Set up JDK 17
-                uses: actions/setup-java@v4
-                with:
-                    java-version: 17
-                    distribution: 'zulu'
+        -   name: Set up JDK 17
+            uses: actions/setup-java@v4
+            with:
+                java-version: 17
+                distribution: 'zulu'
 
-            -   name: Cache SonarQube packages
-                uses: actions/cache@v4
-                with:
-                    path: ~/.sonar/cache
-                    key: ${{ runner.os }}-sonar
-                    restore-keys: ${{ runner.os }}-sonar
+        -   name: Cache SonarQube packages
+            uses: actions/cache@v4
+            with:
+                path: ~/.sonar/cache
+                key: ${{ runner.os }}-sonar
+                restore-keys: ${{ runner.os }}-sonar
 
-            -   name: Cache Gradle packages
-                uses: actions/cache@v4
-                with:
-                    path: |
-                        ~/.gradle/caches
-                        ~/.gradle/wrapper
-                    key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-                    restore-keys: |
-                        ${{ runner.os }}-gradle-
+        -   name: Cache Gradle packages
+            uses: actions/cache@v4
+            with:
+                path: |
+                    ~/.gradle/caches
+                    ~/.gradle/wrapper
+                key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+                restore-keys: |
+                    ${{ runner.os }}-gradle-
 
-            -   name: Build with Gradle
-                run: ./gradlew build
+        -   name: Release
+            if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+            env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            run: |
+                ./gradlew createRelease
+                git push --tags origin HEAD
+                echo "Release completed ${{ steps.release.outputs.released-version }}"
 
-            -   name: SonarQube Scan
-                env:
-                    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-                run: ./gradlew sonar --info
+        -   name: Build with Gradle
+            run: ./gradlew build
 
-            -   name: Release
-                env:
-                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                run: |
-                    ./gradlew release
-                    echo "Release completed ${{ steps.release.outputs.released-version }}"
+        -   name: SonarQube Scan
+            if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+            env:
+                SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+            run: ./gradlew sonar --info

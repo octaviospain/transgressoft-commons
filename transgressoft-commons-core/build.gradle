@@ -1,0 +1,9 @@
+description "Transgressoft Commons Core"
+
+dependencies {
+    api project(path: ':transgressoft-commons-api')
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0'
+    testImplementation "io.kotest:kotest-assertions-json:$kotestVersion"
+    testImplementation "io.kotest:kotest-framework-concurrency:$kotestVersion"
+    testImplementation "io.kotest:kotest-property:$kotestVersion"
+}

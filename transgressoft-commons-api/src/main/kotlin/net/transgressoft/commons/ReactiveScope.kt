@@ -15,31 +15,45 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>. *
  ******************************************************************************/
 
-package net.transgressoft.commons.data.json
+package net.transgressoft.commons
 
-import net.transgressoft.commons.TransEntity
-import kotlinx.serialization.KSerializer
-import kotlinx.serialization.descriptors.ClassSerialDescriptorBuilder
-import kotlinx.serialization.encoding.CompositeDecoder
-import kotlinx.serialization.encoding.CompositeEncoder
-import kotlinx.serialization.encoding.Decoder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
-interface TransEntityPolymorphicSerializer<T : TransEntity> : KSerializer<T> {
-    override fun deserialize(decoder: Decoder): T = createInstance(getPropertiesList(decoder))
+object ReactiveScope {
+    // Default scope with limited parallelism to prevent resource exhaustion
+    // but ensuring all entity events are processed
+    private var defaultFlowScope: CoroutineScope =
+        CoroutineScope(
+            Dispatchers.Default.limitedParallelism(4) + SupervisorJob()
+        )
 
-    fun additionalElements(classSerialDescriptorBuilder: ClassSerialDescriptorBuilder) {
-        // Do nothing by default
+    private var defaultIoScope: CoroutineScope =
+        CoroutineScope(
+            Dispatchers.IO.limitedParallelism(1) + SupervisorJob()
+        )
+
+    /**
+     * Sets the default scope for all reactive entities that don't specify their own.
+     * Primarily used for testing to inject test dispatchers.
+     *
+     * @param scope The coroutine scope to use as default
+     */
+    fun setDefaultFlowScope(scope: CoroutineScope) {
+        defaultFlowScope = scope
     }
 
-    fun additionalSerialize(compositeEncoder: CompositeEncoder, value: T) {
-        // Do nothing by default
+    fun setDefaultIoScope(scope: CoroutineScope) {
+        defaultIoScope = scope
     }
 
-    fun additionalDeserialize(compositeDecoder: CompositeDecoder, propertiesList: MutableList<Any?>, index: Int) {
-        // Do nothing by default
-    }
+    /**
+     * Gets the current default scope for reactive entities.
+     *
+     * @return The current default CoroutineScope
+     */
+    internal fun flowScope(): CoroutineScope = defaultFlowScope
 
-    fun getPropertiesList(decoder: Decoder): List<Any?>
-
-    fun createInstance(propertiesList: List<Any?>): T
+    internal fun ioScope(): CoroutineScope = defaultIoScope
 }

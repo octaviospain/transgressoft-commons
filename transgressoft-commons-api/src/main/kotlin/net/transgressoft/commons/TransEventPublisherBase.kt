@@ -18,61 +18,40 @@
 package net.transgressoft.commons
 
 import mu.KotlinLogging
-import java.util.concurrent.Executors
-import java.util.concurrent.Flow
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.launch
 
 /**
- * Base implementation of [TransEventPublisher] that provides common functionality
- * for all event publishers in the system.
+ * Base implementation of [TransEventPublisher] that provides event filtering and activation capabilities.
  *
- * This class manages subscriptions, controls event activation/deactivation by type,
- * and handles the asynchronous distribution of events to subscribers. It provides
- * the core infrastructure for event-based communication in the system.
+ * `TransEventPublisherBase` serves as a foundational layer for publishing various types of events
+ * in the reactive architecture. It handles the common concerns of event publishers including:
  *
- * @param E The specific type of [TransEvent] published by this publisher
+ * - Selective event publishing based on event type activation
+ * - Filtering events before publication
+ * - Logging event publishing activities
+ *
+ * This class is designed to be extended by domain-specific publishers that need to handle
+ * particular event types, such as CRUD operations or custom domain events.
+ *
+ * @param E The specific type of [TransEvent] this publisher will emit
  * @param name A descriptive name for this publisher, used in logging and debugging
  *
- * @see [TransEventSubscriber]
+ * @see TransEventPublisher
+ * @see EventType
  */
-abstract class TransEventPublisherBase<E : TransEvent>(protected val name: String) : TransEventPublisher<E> {
+abstract class TransEventPublisherBase<E : TransEvent>(
+    protected val name: String,
+    protected val publisher: TransEventPublisher<E> = FlowEventPublisher<E>()
+) : TransEventPublisher<E> by publisher {
 
     private val log = KotlinLogging.logger {}
 
-    private val subscribers: MutableSet<Flow.Subscriber<in E>> = mutableSetOf()
-
     private var activatedEventTypes: MutableSet<EventType> = mutableSetOf()
 
-    companion object {
-        private val eventsPublisherDispatcher: CoroutineDispatcher by lazy { Executors.newCachedThreadPool().asCoroutineDispatcher() }
-        private val eventsPublisherScope: CoroutineScope = CoroutineScope(eventsPublisherDispatcher)
-    }
-
     protected fun putEventAction(event: E) {
-        if (isEventTypeActive(event.type)) {
-            eventsPublisherScope.launch {
-                subscribers.forEach {
-                    log.trace { "Firing $event on subscriber $it from $name" }
-                    it.onNext(event)
-                }
-            }
+        if (activatedEventTypes.contains(event.type)) {
+            publisher.emitAsync(event)
         }
     }
-
-    protected open fun putCompleteEvent() {
-        eventsPublisherScope.launch {
-            subscribers.forEach {
-                log.trace { "onComplete event fired from $name" }
-                it.onComplete()
-            }
-            subscribers.clear()
-        }
-    }
-
-    protected fun isEventTypeActive(type: EventType) = activatedEventTypes.contains(type)
 
     protected fun disableEvents(vararg types: EventType) {
         types.toSet().let {
@@ -88,15 +67,5 @@ abstract class TransEventPublisherBase<E : TransEvent>(protected val name: Strin
         }
     }
 
-    override fun subscribe(subscriber: Flow.Subscriber<in E>) {
-        log.trace { "$name registered a subscription to $subscriber" }
-        subscribers.add(subscriber)
-    }
-
-    protected open fun unsubscribe(subscriber: Flow.Subscriber<in E>) {
-        log.trace { "$name removed the subscription to $subscriber" }
-        subscribers.remove(subscriber)
-    }
-
-    override fun toString() = "TransEventPublisher(name=$name, subscribers=${subscribers.size}, activatedEventTypes=$activatedEventTypes)"
+    override fun toString() = "TransEventPublisher(name=$name, activatedEventTypes=$activatedEventTypes)"
 }

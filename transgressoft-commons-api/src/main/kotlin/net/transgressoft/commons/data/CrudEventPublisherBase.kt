@@ -19,11 +19,14 @@ package net.transgressoft.commons.data
 
 import net.transgressoft.commons.IdentifiableEntity
 import net.transgressoft.commons.TransEventPublisherBase
+import net.transgressoft.commons.TransEventSubscription
+import net.transgressoft.commons.data.StandardCrudEvent.Type
 import net.transgressoft.commons.data.StandardCrudEvent.Type.CREATE
 import net.transgressoft.commons.data.StandardCrudEvent.Type.DELETE
 import net.transgressoft.commons.data.StandardCrudEvent.Type.READ
 import net.transgressoft.commons.data.StandardCrudEvent.Type.UPDATE
 import java.util.concurrent.Flow
+import java.util.function.Consumer
 
 /**
  * Base publisher implementation specialized for CRUD events related to identifiable entities.
@@ -38,20 +41,23 @@ import java.util.concurrent.Flow
  * @param name A descriptive name for this publisher, used in logging and debugging
  *
  * @see [CrudEvent]
- * @see [CrudEventSubscription]
  */
 abstract class CrudEventPublisherBase<K, T : IdentifiableEntity<K>>(name: String) : TransEventPublisherBase<CrudEvent<K, T>>(name) where K : Comparable<K> {
-
     init {
         activateEvents(CREATE, UPDATE, DELETE)
     }
 
     final override fun subscribe(subscriber: Flow.Subscriber<in CrudEvent<K, T>>) {
         super.subscribe(subscriber)
-        subscriber.onSubscribe(
-            object : CrudEventSubscription<K, T>(this@CrudEventPublisherBase, { unsubscribe(subscriber) }) {}
-        )
     }
+
+    fun subscribe(crudEventType: Type, action: Consumer<CrudEvent<K, T>>): TransEventSubscription<in T> =
+        when (crudEventType) {
+            CREATE -> addCreateEventSubscriber { action.accept(it) }
+            READ -> addReadEventSubscriber { action.accept(it) }
+            UPDATE -> addUpdateEventSubscriber { action.accept(it) }
+            DELETE -> addDeleteEventSubscriber { action.accept(it) }
+        }
 
     /**
      * Publishes a CREATE event for a single entity.
@@ -95,10 +101,8 @@ abstract class CrudEventPublisherBase<K, T : IdentifiableEntity<K>>(name: String
      * @param entities The collection of updated entities in their current state
      * @param oldEntities The collection of entities in their previous state before the update
      */
-    protected open fun putUpdateEvent(
-        entities: Collection<T>,
-        oldEntities: Collection<T>
-    ) = putEventAction(UPDATE.of(entities.toMapById(), oldEntities.toMapById()))
+    protected open fun putUpdateEvent(entities: Collection<T>, oldEntities: Collection<T>) =
+        putEventAction(UPDATE.of(entities.toMapById(), oldEntities.toMapById()))
 
     /**
      * Publishes a DELETE event for a single entity.
@@ -115,4 +119,32 @@ abstract class CrudEventPublisherBase<K, T : IdentifiableEntity<K>>(name: String
     protected open fun putDeleteEvent(entities: Collection<T>) = putEventAction(DELETE.of(entities.toMapById()))
 
     private fun Collection<T>.toMapById() = associateBy { it.id }
+
+    private fun addCreateEventSubscriber(action: (CrudEvent<K, T>) -> Unit): TransEventSubscription<in T> =
+        subscribe {
+            if (it.type == CREATE) {
+                action.invoke(it)
+            }
+        }
+
+    private fun addUpdateEventSubscriber(action: (CrudEvent<K, T>) -> Unit): TransEventSubscription<in T> =
+        subscribe {
+            if (it.type == UPDATE) {
+                action.invoke(it)
+            }
+        }
+
+    private fun addReadEventSubscriber(action: (CrudEvent<K, T>) -> Unit): TransEventSubscription<in T> =
+        subscribe {
+            if (it.type == READ) {
+                action.invoke(it)
+            }
+        }
+
+    private fun addDeleteEventSubscriber(action: (CrudEvent<K, T>) -> Unit): TransEventSubscription<in T> =
+        subscribe {
+            if (it.type == DELETE) {
+                action.invoke(it)
+            }
+        }
 }

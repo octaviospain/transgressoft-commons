@@ -18,6 +18,8 @@
 package net.transgressoft.commons
 
 import java.util.concurrent.Flow
+import java.util.function.Consumer
+import kotlinx.coroutines.flow.SharedFlow
 
 /**
  * A publisher of [TransEvent]s that implements the reactive streams [Flow.Publisher] interface.
@@ -28,4 +30,19 @@ import java.util.concurrent.Flow
  *
  * @param E The specific type of [TransEvent] published by this publisher
  */
-interface TransEventPublisher<E : TransEvent> : Flow.Publisher<E>
+interface TransEventPublisher<E : TransEvent> : Flow.Publisher<E> {
+
+    /**
+     * A flow of entity change events that can be observed by collectors.
+     */
+    val changes: SharedFlow<E>
+
+    /**
+     * Publishes an event to all subscribers, asynchronously.
+     */
+    fun emitAsync(event: E)
+
+    fun subscribe(action: suspend (E) -> Unit): TransEventSubscription<in TransEntity>
+
+    fun subscribe(action: Consumer<in E>): TransEventSubscription<in TransEntity>
+}

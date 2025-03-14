@@ -3,7 +3,6 @@ package net.transgressoft.commons.data
 import net.transgressoft.commons.EntityChangeEvent
 import net.transgressoft.commons.EventType
 import net.transgressoft.commons.TransEventSubscriberBase
-import net.transgressoft.commons.TransEventSubscription
 import net.transgressoft.commons.data.StandardCrudEvent.Type.CREATE
 import net.transgressoft.commons.data.StandardCrudEvent.Type.DELETE
 import net.transgressoft.commons.data.StandardCrudEvent.Type.READ
@@ -29,7 +28,6 @@ import kotlin.time.Duration.Companion.milliseconds
 internal class VolatileRepositoryTest : StringSpec({
 
     class SomeClassSubscribedToEvents() : TransEventSubscriberBase<Person, CrudEvent<Int, Person>>("Some class") {
-        var subscriptionReceived: TransEventSubscription<Person>? = null
         val createEventEntities = AtomicInteger(0)
         val deletedEventEntities = AtomicInteger(0)
         val receivedEvents = mutableMapOf<EventType, CrudEvent<Int, Person>>()
@@ -44,8 +42,6 @@ internal class VolatileRepositoryTest : StringSpec({
                 deletedEventEntities.getAndUpdate { it + event.entities.size }
             }
             addOnNextEventAction(READ) { receivedEvents[it.type] = it }
-
-            addOnSubscribeEventAction { subscriptionReceived = it }
         }
     }
 
@@ -88,7 +84,7 @@ internal class VolatileRepositoryTest : StringSpec({
             repository - entity2 shouldBe true
             repository.isEmpty shouldBe true
 
-            val repository2: RepositoryBase<Int, Person> = VolatilePersonRepository()
+            val repository2: Repository<Int, Person> = VolatilePersonRepository()
             repository shouldBe repository2
         }
     }
@@ -148,8 +144,6 @@ internal class VolatileRepositoryTest : StringSpec({
     }
 
     "Repository publishes CRUD events received by a subscriber" {
-        eventually(100.milliseconds) { subscriber.subscriptionReceived?.source shouldBe repository }
-
         val person = arbitraryPerson().next()
         val person2 = arbitraryPerson().next()
         repository.addOrReplaceAll(setOf(person, person2)) shouldBe true

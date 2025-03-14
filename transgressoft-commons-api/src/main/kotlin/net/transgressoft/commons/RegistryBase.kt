@@ -15,9 +15,10 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>. *
  ******************************************************************************/
 
-package net.transgressoft.commons.data
+package net.transgressoft.commons
 
-import net.transgressoft.commons.IdentifiableEntity
+import net.transgressoft.commons.data.CrudEventPublisherBase
+import net.transgressoft.commons.data.Registry
 import mu.KotlinLogging
 import java.util.*
 import java.util.function.Consumer
@@ -53,17 +54,20 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
     private val log = KotlinLogging.logger(javaClass.name)
 
     @Suppress("UNCHECKED_CAST")
-    override fun runForSingle(id: K, entityAction: Consumer<T>): Boolean =
-        Optional.ofNullable(entitiesById[id]).map {
-            val previousHashcode = it.hashCode()
-            val entityBeforeUpdate = it.clone() as T
-            entityAction.accept(it)
-            if (previousHashcode != it.hashCode()) {
-                log.debug { "Entity with id ${it.id} was modified as a result of an action" }
-                putUpdateEvent(it, entityBeforeUpdate)
-                true
-            } else false
-        }.orElse(false)
+    override fun runForSingle(id: K, entityAction: Consumer<T>): Boolean {
+        val entity = entitiesById[id] ?: return false
+        val previousHashcode = entity.hashCode()
+        val entityBeforeUpdate = entity.clone() as T
+
+        entityAction.accept(entity)
+
+        if (previousHashcode != entity.hashCode()) {
+            log.debug { "Entity with id ${entity.id} was modified as a result of an action" }
+            putUpdateEvent(entity, entityBeforeUpdate)
+            return true
+        }
+        return false
+    }
 
     override fun runForMany(ids: Set<K>, entityAction: Consumer<T>): Boolean =
         ids.mapNotNull { entitiesById[it] }.let {
@@ -76,22 +80,28 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
 
     @Suppress("UNCHECKED_CAST")
     private fun runActionAndReplaceModifiedEntities(entities: Set<T>, entityAction: Consumer<T>): Boolean {
-        val updatedEntities = mutableListOf<T>()
-        val entitiesBeforeUpdate = mutableListOf<T>()
+        val updates =
+            entities.mapNotNull { entity ->
+                val previousHashCode = entity.hashCode()
+                val entityBeforeChange = entity.clone() as T
 
-        entities.forEach {
-            val previousHashCode = it.hashCode()
-            val entityBeforeChange = it.clone() as T
-            entityAction.accept(it)
-            if (previousHashCode != it.hashCode()) {
-                log.debug { "Entity with id ${it.id} was modified as a result of an action" }
-                entitiesBeforeUpdate.add(entityBeforeChange)
-                updatedEntities.add(it)
+                entityAction.accept(entity)
+
+                if (previousHashCode != entity.hashCode()) {
+                    // Ensure the entity in the map is still this entity
+                    entitiesById.computeIfPresent(entity.id) { _, current ->
+                        if (current == entityBeforeChange)
+                            entity
+                        else current
+                    }
+                    log.debug { "Entity with id ${entity.id} was modified as a result of an action" }
+                    Pair(entity, entityBeforeChange)
+                } else null
             }
-        }
 
-        if (updatedEntities.isNotEmpty()) {
-            putUpdateEvent(updatedEntities, entitiesBeforeUpdate)
+        if (updates.isNotEmpty()) {
+            val (modified, originals) = updates.unzip()
+            putUpdateEvent(modified, originals)
             return true
         }
 

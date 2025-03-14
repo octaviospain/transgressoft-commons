@@ -3,7 +3,7 @@ package net.transgressoft.commons.data
 import net.transgressoft.commons.EventType
 import net.transgressoft.commons.ReactiveEntity
 import net.transgressoft.commons.ReactiveEntityBase
-import net.transgressoft.commons.data.json.GenericJsonFileRepository
+import net.transgressoft.commons.data.json.JsonFileRepositoryBase
 import net.transgressoft.commons.data.json.TransEntityPolymorphicSerializer
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.arbitrary
@@ -86,19 +86,24 @@ fun arbitraryPerson(id: Int = defaultId) =
         )
     }
 
-abstract class HumanGenericJsonFileRepositoryBase<H : Human<H>>(name: String, file: File, humanSerializer: KSerializer<H>) :
-    GenericJsonFileRepository<Int, H>(
-        file,
-        MapSerializer(Int.serializer(), humanSerializer),
-        SerializersModule {
-            polymorphic(Human::class) {
-                subclass(Person::class, Person.serializer())
+abstract class HumanGenericJsonFileRepositoryBase<H : Human<H>>(
+    name: String,
+    file: File,
+    humanSerializer: KSerializer<H>
+) :
+    JsonFileRepositoryBase<Int, H>(
+            name,
+            file,
+            MapSerializer(Int.serializer(), humanSerializer),
+            SerializersModule {
+                polymorphic(Human::class) {
+                    subclass(Person::class, Person.serializer())
+                }
             }
-        },
-        name
-    )
+        )
 
-open class PersonJsonFileRepository(file: File) : HumanGenericJsonFileRepositoryBase<Personly>("PersonRepo", file, PersonlySerializer())
+open class PersonJsonFileRepository(file: File) :
+    HumanGenericJsonFileRepositoryBase<Personly>("PersonRepo", file, PersonlySerializer())
 
 class PersonlySerializer : HumanSerializer<Personly>() {
     override fun additionalElements(classSerialDescriptorBuilder: ClassSerialDescriptorBuilder) {

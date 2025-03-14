@@ -19,6 +19,7 @@ package net.transgressoft.commons.data.json
 
 import net.transgressoft.commons.ReactiveEntity
 import net.transgressoft.commons.data.Repository
+import java.io.Closeable
 import java.io.File
 
 /**
@@ -31,19 +32,11 @@ import java.io.File
  * @param K The type of the entity's identifier, which must be [Comparable]
  * @param R The type of reactive entity this repository manages
  */
-interface JsonRepository<K : Comparable<K>, R : ReactiveEntity<K, R>> : Repository<K, R> {
+interface JsonRepository<K : Comparable<K>, R : ReactiveEntity<K, R>> : Repository<K, R>, Closeable {
     /**
      * The JSON file where entity data is persisted.
      *
      * This property can be changed to redirect storage to a different file.
      */
     var jsonFile: File
-
-    /**
-     * Releases any resources held by this repository.
-     *
-     * This method should be called when the repository is no longer needed to ensure
-     * proper cleanup of resources such as file handles or background tasks.
-     */
-    fun dispose()
 }

@@ -20,7 +20,7 @@ package net.transgressoft.commons
 import java.util.concurrent.Flow
 
 /**
- * A specialized [Flow.Subscription] that connects subscribers to [TransEventPublisherBase]
+ * A specialized [Flow.Subscription] that connects subscribers to [TransEventPublisher]
  * instances in the transgressoft-commons event system.
  *
  * This interface extends the standard Java Flow API with additional context specific
@@ -37,5 +37,5 @@ interface TransEventSubscription<T : TransEntity> : Flow.Subscription {
      *
      * This reference allows subscribers to interact with or query the publisher if needed.
      */
-    val source: TransEventPublisherBase<out TransEvent>
+    val source: TransEventPublisher<out TransEvent>
 }

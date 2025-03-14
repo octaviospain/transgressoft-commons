@@ -18,6 +18,7 @@
 package net.transgressoft.commons.data
 
 import net.transgressoft.commons.IdentifiableEntity
+import net.transgressoft.commons.RepositoryBase
 
 /**
  * An in-memory repository implementation with no persistence.

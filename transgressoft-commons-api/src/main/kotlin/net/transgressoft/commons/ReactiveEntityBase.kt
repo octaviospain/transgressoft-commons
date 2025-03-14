@@ -21,19 +21,13 @@ import net.transgressoft.commons.data.StandardCrudEvent.Type.UPDATE
 import net.transgressoft.commons.data.of
 import mu.KotlinLogging
 import java.time.LocalDateTime
-import java.util.concurrent.Executors
-import java.util.concurrent.Flow
 import java.util.function.Consumer
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.launch
 
 /**
  * Abstract base class that provides reactive functionality for entities, enabling them to notify subscribers
- * about property changes through a publish-subscribe pattern.
+ * about property changes through a reactive flow-based pattern.
  *
- * This class implements the [ReactiveEntity] interface and manages subscriptions from interested parties.
+ * This class implements the [ReactiveEntity] interface and manages subscriptions using Kotlin Flows.
  * When properties of the entity change, all subscribers are automatically notified with both the updated
  * entity state and the previous state.
  *
@@ -44,17 +38,17 @@ import kotlinx.coroutines.launch
  * @see Flow.Subscriber
  * @see EntityChangeEvent
  */
-abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>> : ReactiveEntity<K, R> where K : Comparable<K> {
+abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
+    private val publisher: TransEventPublisher<EntityChangeEvent<K, R>> = FlowEventPublisher()
+) : TransEventPublisher<EntityChangeEvent<K, R>> by publisher, ReactiveEntity<K, R> where K : Comparable<K> {
     private val log = KotlinLogging.logger {}
-    private val entityLog = KotlinLogging.logger(javaClass.name)
 
-    private val subscribers: MutableSet<Flow.Subscriber<in EntityChangeEvent<K, R>>> = mutableSetOf()
+    protected constructor() : this(FlowEventPublisher())
 
-    companion object {
-        private val reactiveEntityDispatcher: CoroutineDispatcher by lazy { Executors.newCachedThreadPool().asCoroutineDispatcher() }
-        private val reactiveEntityEventsScope: CoroutineScope = CoroutineScope(reactiveEntityDispatcher)
-    }
-
+    /**
+     * The timestamp when this entity was last modified.
+     * Automatically updated whenever a property is changed via [setAndNotify].
+     */
     override var lastDateModified: LocalDateTime = LocalDateTime.now()
         protected set
 
@@ -77,45 +71,17 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>> : ReactiveEntity<
     @JvmOverloads
     protected fun <T> setAndNotify(newValue: T, oldValue: T, propertySetAction: Consumer<T> = Consumer { }) {
         if (newValue != oldValue) {
-            val entityBeforeChange = clone() as R
+            val entityBeforeChange = clone()
             propertySetAction.accept(newValue)
             lastDateModified = LocalDateTime.now()
-            notifySubscribers(this as R, entityBeforeChange)
+            log.trace { "Firing entity update event from $entityBeforeChange to $this" }
+            val event =
+                UPDATE.of(
+                    mapOf(id to this),
+                    mapOf(entityBeforeChange.id to entityBeforeChange)
+                ) as EntityChangeEvent<K, R>
+
+            publisher.emitAsync(event)
         }
-    }
-
-    /**
-     * Notifies all subscribers about changes to the entity.
-     *
-     * This method is called internally when entity properties change and handles the
-     * asynchronous distribution of update events to all registered subscribers. Each
-     * subscriber receives an update event containing both the updated entity and its
-     * previous state, allowing subscribers to react to specific changes.
-     *
-     * The notification occurs asynchronously using a dedicated coroutine scope to
-     * prevent blocking the main thread during subscriber notifications.
-     *
-     * @param updatedEntity The current state of the entity after changes
-     * @param oldEntity The previous state of the entity before changes
-     */
-    private fun notifySubscribers(updatedEntity: R, oldEntity: R) {
-        reactiveEntityEventsScope.launch {
-            subscribers.forEach {
-                log.trace { "Firing entity update event from $oldEntity to $updatedEntity towards $it" }
-                it.onNext(UPDATE.of(mapOf(updatedEntity.id to updatedEntity), mapOf(oldEntity.id to oldEntity)) as EntityChangeEvent<K, R>)
-            }
-        }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    override fun subscribe(subscriber: Flow.Subscriber<in EntityChangeEvent<K, R>>) {
-        entityLog.trace { "Subscription registered to $subscriber" }
-        subscribers.add(subscriber)
-        subscriber.onSubscribe(EntityChangeSubscription(this@ReactiveEntityBase as R) { unsubscribe(subscriber) })
-    }
-
-    protected open fun unsubscribe(subscriber: Flow.Subscriber<in EntityChangeEvent<K, R>>) {
-        entityLog.trace { "Subscription removed from $subscriber" }
-        subscribers.remove(subscriber)
     }
 }

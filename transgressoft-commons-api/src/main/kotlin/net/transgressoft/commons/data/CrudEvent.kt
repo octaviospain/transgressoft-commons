@@ -86,6 +86,9 @@ fun CrudEvent<*, out IdentifiableEntity<*>>.isUpdate(): Boolean = type == UPDATE
 
 fun CrudEvent<*, out IdentifiableEntity<*>>.isDelete(): Boolean = type == DELETE
 
+fun <K : Comparable<K>, T: IdentifiableEntity<K>> Type.of(entity: T, oldEntity: T): CrudEvent<K, T> =
+    this.of(mapOf(entity.id to entity), mapOf(oldEntity.id to oldEntity))
+
 fun <K: Comparable<K>, T: IdentifiableEntity<K>> Type.of(entities: Map<K, T>, oldEntities: Map<K, T> = emptyMap()): CrudEvent<K, T> {
     if (this == UPDATE) {
         require(eventCollectionsAreConsistent(entities, oldEntities)) {

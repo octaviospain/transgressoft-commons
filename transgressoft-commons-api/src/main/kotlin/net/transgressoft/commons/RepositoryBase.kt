@@ -15,12 +15,11 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>. *
  ******************************************************************************/
 
-package net.transgressoft.commons.data
+package net.transgressoft.commons
 
-import net.transgressoft.commons.IdentifiableEntity
+import net.transgressoft.commons.data.Repository
 import mu.KotlinLogging
 import java.util.Objects
-import java.util.stream.Collectors.partitioningBy
 
 /**
  * Base class for mutable entity repositories with reactive behavior.
@@ -36,7 +35,7 @@ import java.util.stream.Collectors.partitioningBy
  * - Detailed logging of repository operations
  *
  * This class serves as the foundation for concrete repository implementations like
- * [VolatileRepository] and [JsonFileRepository].
+ * [VolatileRepository] in transgressoft-commons-core.
  *
  * @param K The type of entity identifier, must be [Comparable]
  * @param T The type of entity being stored, must implement [IdentifiableEntity]
@@ -50,8 +49,8 @@ abstract class RepositoryBase<K : Comparable<K>, T : IdentifiableEntity<K>>(
     private val log = KotlinLogging.logger(javaClass.name)
 
     override fun add(entity: T): Boolean {
-        if (!contains(entity.id)) {
-            entitiesById[entity.id] = entity
+        val previous = entitiesById.putIfAbsent(entity.id, entity)
+        if (previous == null) {
             putCreateEvent(entity)
             log.debug { "Entity with id ${entity.id} added to repository: $entity" }
             return true
@@ -60,86 +59,83 @@ abstract class RepositoryBase<K : Comparable<K>, T : IdentifiableEntity<K>>(
         return false
     }
 
-    override fun addOrReplace(entity: T): Boolean =
-        add(entity).let { added ->
-            if (!added) {
-                replace(entity)
-            } else {
-                true
-            }
+    override fun addOrReplace(entity: T): Boolean {
+        val oldValue = entitiesById.put(entity.id, entity)
+        if (oldValue == null) {
+            putCreateEvent(entity)
+            log.debug { "Entity with id ${entity.id} added to repository: $entity" }
+        } else if (oldValue != entity) {
+            putUpdateEvent(entity, oldValue)
+            log.debug { "Entity with id ${entity.id} was replaced by $entity" }
+        } else {
+            return false
         }
-
-    private fun replace(entity: T): Boolean {
-        var wasReplaced = false
-        entitiesById.computeIfPresent(entity.id) { _, storedEntity ->
-            if (storedEntity != entity) {
-                wasReplaced = true
-                log.debug { "Entity with id ${entity.id} was replaced by $entity" }
-                putUpdateEvent(entity, storedEntity)
-                entity
-            } else
-                storedEntity
-        }
-
-        return wasReplaced
+        return true
     }
 
     override fun addOrReplaceAll(entities: Set<T>): Boolean {
+        if (entities.isEmpty()) return false
+
+        val added = mutableListOf<T>()
+        val updated = mutableListOf<T>()
         val entitiesBeforeUpdate = mutableListOf<T>()
 
-        val addedAndReplaced =
-            entities.stream().filter { it != null && entitiesById.containsValue(it).not() }
-                .collect(
-                    partitioningBy { entity ->
-                        val entityBefore = entitiesById[entity.id]
-                        if (entityBefore != null)
-                            entitiesBeforeUpdate.add(entityBefore)
-                        entitiesById[entity.id] = entity
-                        return@partitioningBy entityBefore == null
-                    }
-                )
-
-        addedAndReplaced[true]?.let {
-            if (it.isNotEmpty()) {
-                putCreateEvent(it)
-                log.debug { "${it.size} entities were added: $it" }
-            }
-        }
-        addedAndReplaced[false]?.let {
-            if (it.isNotEmpty()) {
-                putUpdateEvent(it, entitiesBeforeUpdate)
-                log.debug { "${it.size} entities were replaced: $it" }
+        entities.forEach { entity ->
+            val oldValue = entitiesById.put(entity.id, entity)
+            if (oldValue == null) {
+                added.add(entity)
+            } else if (oldValue != entity) {
+                updated.add(entity)
+                entitiesBeforeUpdate.add(oldValue)
             }
         }
 
-        return addedAndReplaced.isNotEmpty()
+        if (added.isNotEmpty()) {
+            putCreateEvent(added)
+            log.debug { "${added.size} entities were added: $added" }
+        }
+
+        if (updated.isNotEmpty()) {
+            putUpdateEvent(updated, entitiesBeforeUpdate)
+            log.debug { "${updated.size} entities were replaced: $updated" }
+        }
+
+        return added.isNotEmpty() || updated.isNotEmpty()
     }
 
-    override fun remove(entity: T): Boolean =
-        entitiesById.remove(entity.id).let { removed ->
-            if (removed != null) {
-                putDeleteEvent(entity)
-                log.debug { "Entity with id ${entity.id} was removed: $entity" }
-            }
-            removed != null
+    override fun remove(entity: T): Boolean {
+        val removed = entitiesById.remove(entity.id, entity)
+        if (removed) {
+            putDeleteEvent(entity)
+            log.debug { "Entity with id ${entity.id} was removed: $entity" }
         }
+        return removed
+    }
 
     override fun removeAll(entities: Set<T>): Boolean {
-        val removedOrNot = entities.stream().collect(partitioningBy { entitiesById.remove(it.id, it) })
-        removedOrNot[true]?.let {
-            if (it.isNotEmpty()) {
-                putDeleteEvent(it)
-                log.debug { "${it.size} entities were removed: $it" }
+        val removed = mutableListOf<T>()
+
+        entities.forEach { entity ->
+            if (entitiesById.remove(entity.id, entity)) {
+                removed.add(entity)
             }
         }
-        return removedOrNot[true]?.isNotEmpty() ?: false
+
+        if (removed.isNotEmpty()) {
+            putDeleteEvent(removed)
+            log.debug { "${removed.size} entities were removed: $removed" }
+            return true
+        }
+
+        return false
     }
 
     override fun clear() {
-        if (entitiesById.isNotEmpty()) {
-            putDeleteEvent(entitiesById.values.toSet())
-            log.debug { "${entitiesById.size} entities were removed resulting in empty repository" }
+        val allEntities = HashSet(entitiesById.values)
+        if (allEntities.isNotEmpty()) {
             entitiesById.clear()
+            putDeleteEvent(allEntities)
+            log.debug { "${allEntities.size} entities were removed resulting in empty repository" }
         }
     }
 

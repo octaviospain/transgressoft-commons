@@ -18,11 +18,21 @@
 package net.transgressoft.commons.data.json
 
 import net.transgressoft.commons.ReactiveEntity
-import net.transgressoft.commons.data.RepositoryBase
+import net.transgressoft.commons.ReactiveScope
+import net.transgressoft.commons.RepositoryBase
+import net.transgressoft.commons.TransEventSubscription
 import mu.KotlinLogging
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
@@ -35,23 +45,24 @@ import kotlinx.serialization.modules.SerializersModule
  * with file I/O capabilities, ensuring that repository operations are automatically persisted.
  *
  * Key features:
- * - Asynchronous JSON serialization using a dedicated thread pool
+ * - Asynchronous JSON serialization using debouncing to optimize I/O operations
  * - Automatic persistence of all repository operations
- * - Thread-safe operations using ConcurrentHashMap
+ * - Thread-safe operations using ConcurrentHashMap by the upstream [RepositoryBase]
  * - Error handling with logging
+ * - Subscription management for entity lifecycle
  *
+ * @param name A descriptive name for this repository, used in logging
  * @param K The type of entity identifier, must be [Comparable]
  * @param R The type of entity being stored, must implement [ReactiveEntity]
  * @param file The JSON file to store entities in
  * @param mapSerializer The serializer used to convert entities to/from JSON
  * @param repositorySerializersModule Optional module for configuring JSON serialization
- * @param name A descriptive name for this repository, used in logging
  */
 abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R>>(
+    name: String,
     file: File,
     private val mapSerializer: KSerializer<Map<K, R>>,
-    private val repositorySerializersModule: SerializersModule = SerializersModule {},
-    name: String
+    private val repositorySerializersModule: SerializersModule = SerializersModule {}
 ) : RepositoryBase<K, R>("$name-$file", ConcurrentHashMap()), JsonRepository<K, R> {
     private val log = KotlinLogging.logger(javaClass.name)
 
@@ -61,7 +72,7 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
                 "Provided jsonFile does not exist, is not writable, is not a json file, or is not empty"
             }
             field = value
-            serializeToJson()
+            triggerSerialization()
             log.info { "jsonFile set to $value" }
         }
 
@@ -77,27 +88,59 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
         require(this.jsonFile.exists().and(this.jsonFile.canWrite()).and(this.jsonFile.extension == "json")) {
             "Provided jsonFile does not exist, is not writable or is not a json file"
         }
+
+        // Load entities from JSON file on initialization
         decodeFromJson()?.let { entitiesById.putAll(it) }
     }
 
-    private val executorService =
-        Executors.newFixedThreadPool(1) { runnable ->
-            Thread(runnable).apply {
-                isDaemon = true
-                setUncaughtExceptionHandler { thread, exception ->
-                    log.error(exception) { "Error in thread $thread" }
+    /**
+     * The coroutine scope used for file I/O operations. Defaults to a scope with
+     * limitedParallelism(1) on the IO dispatcher to ensure sequential file access and thread safety.
+     * For testing, provide a scope with a test dispatcher.
+     * @see [ReactiveScope]
+     */
+    private val ioScope: CoroutineScope = ReactiveScope.ioScope()
+
+    /**
+     * Shared flow used to trigger serialization of the repository state. Debounced to avoid
+     * excessive serialization operations when multiple changes occur in a short period.
+     */
+    private val serializationTrigger =
+        MutableSharedFlow<Unit>(
+            replay = 1,
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST
+        )
+
+    private val serializationDelay = 300.milliseconds
+
+    @OptIn(FlowPreview::class)
+    private val serializationJob =
+        ioScope.launch {
+            serializationTrigger
+                .debounce(serializationDelay)
+                .collect {
+                    performSerialization()
                 }
-            }
         }
 
-    protected fun serializeToJson() {
-        jsonFile.run {
-            executorService.execute {
-                json.encodeToString(mapSerializer, entitiesById).also {
-                    jsonFile.writeText(it)
-                    log.debug { "${this@JsonFileRepositoryBase.name} serialized to file $jsonFile" }
-                }
+    /**
+     * Subscriptions map for each entity in the repository is needed in order to unsubscribe
+     * from their changes once they are removed.
+     */
+    private val subscriptionsMap: MutableMap<K, TransEventSubscription<in R>> = ConcurrentHashMap()
+
+    private suspend fun performSerialization() {
+        try {
+            val jsonString = json.encodeToString(mapSerializer, entitiesById)
+
+            // Limit serialization to one concurrent operation
+            withContext(ioScope.coroutineContext) {
+                jsonFile.writeText(jsonString)
             }
+            log.debug { "$name serialized to file $jsonFile" }
+        } catch (exception: Exception) {
+            log.error(exception) { "Error serializing to file $jsonFile" }
         }
     }
 
@@ -106,47 +149,66 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
             json.decodeFromString(mapSerializer, jsonFile.readText())
         } else null
 
-    override fun dispose() {
-        executorService.shutdown()
+    override fun close() {
+        runBlocking {
+            // Ensure any pending serialization is performed
+            performSerialization()
+            serializationJob.cancel()
+        }
     }
 
     override fun add(entity: R) =
         super.add(entity).also { added ->
             if (added) {
-                serializeToJson()
+                triggerSerialization()
+                val subscription = entity.subscribe { triggerSerialization() }
+                subscriptionsMap[entity.id] = subscription
             }
         }
+
+    protected fun triggerSerialization() {
+        ioScope.launch {
+            serializationTrigger.emit(Unit)
+        }
+    }
 
     override fun addOrReplace(entity: R) =
         super.addOrReplace(entity).also { added ->
             if (added) {
-                serializeToJson()
+                triggerSerialization()
+                entity.subscribe { triggerSerialization() }
             }
         }
 
     override fun addOrReplaceAll(entities: Set<R>) =
         super.addOrReplaceAll(entities).also { added ->
             if (added) {
-                serializeToJson()
+                triggerSerialization()
+                entities.forEach { entity ->
+                    val subscription = entity.subscribe { triggerSerialization() }
+                    subscriptionsMap[entity.id] = subscription
+                }
             }
         }
 
     override fun remove(entity: R) =
         super.remove(entity).also { removed ->
             if (removed) {
-                serializeToJson()
+                triggerSerialization()
+                subscriptionsMap[entity.id]?.cancel() ?: error("Repository should contain a subscription for $entity")
             }
         }
 
     override fun removeAll(entities: Set<R>) =
         super.removeAll(entities).also { removed ->
             if (removed) {
-                serializeToJson()
+                triggerSerialization()
+                entities.forEach { subscriptionsMap[it.id]?.cancel() ?: error("Repository should contain a subscription for $it") }
             }
         }
 
     override fun clear() {
         super.clear()
-        serializeToJson()
+        triggerSerialization()
     }
 }

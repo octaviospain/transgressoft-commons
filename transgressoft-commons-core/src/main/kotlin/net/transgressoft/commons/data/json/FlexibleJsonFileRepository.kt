@@ -47,7 +47,9 @@ import kotlinx.serialization.json.put
  * primitives to enable subscription to value changes.
  *
  * The class handles serialization of primitive values to a simple flat JSON structure,
- * where keys are the IDs and values are the primitive values themselves.
+ * where keys are the IDs and values are the primitive values themselves. Changes to the values
+ * are automatically persisted with debouncing to prevent excessive file I/O operations when
+ * multiple values change in rapid succession.
  *
  * Example usage:
  * ```
@@ -63,13 +65,17 @@ import kotlinx.serialization.json.put
  * ```
  *
  * @param jsonFile The JSON file to store primitive values in
+ * @param ioScope The coroutine scope used for file I/O operations. By default, uses a scope with
+ *        limitedParallelism(1) on the IO dispatcher to ensure thread-safe file access. For testing,
+ *        provide a scope created with a test dispatcher to control virtual time execution.
  */
 @Suppress("UNCHECKED_CAST")
-open class FlexibleJsonFileRepository(jsonFile: File) : GenericJsonFileRepository<String, ReactivePrimitive<Any>>(
-    jsonFile,
-    ReactiveValueMapSerializer,
-    name = "FlexibleJsonFileRepository"
-) {
+open class FlexibleJsonFileRepository(jsonFile: File) :
+    JsonFileRepositoryBase<String, ReactivePrimitive<Any>>(
+        "FlexibleJsonFileRepository",
+        jsonFile,
+        ReactiveValueMapSerializer
+    ) {
     fun createReactiveString(id: String, value: String) = ReactiveString(id, value).also { add(it as ReactivePrimitive<Any>) }
 
     fun createReactiveBoolean(id: String, value: Boolean) = ReactiveBoolean(id, value).also { add(it as ReactivePrimitive<Any>) }

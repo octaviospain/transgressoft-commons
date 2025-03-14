@@ -26,7 +26,8 @@ data class Man(
     override fun clone(): Man = copy()
 }
 
-open class ManGenericJsonFileRepository(file: File) : HumanGenericJsonFileRepositoryBase<Manly>("ManRepo", file, ManlySerializer())
+open class ManGenericJsonFileRepository(file: File) :
+    HumanGenericJsonFileRepositoryBase<Manly>("ManRepo", file, ManlySerializer())
 
 class ManlySerializer : HumanSerializer<Manly>() {
     override fun additionalElements(classSerialDescriptorBuilder: ClassSerialDescriptorBuilder) {

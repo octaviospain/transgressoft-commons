@@ -5,8 +5,9 @@
         </encoder>
     </appender>
     <logger name="org.jaudiotagger.audio" level="WARN" />
+    <logger name="net.transgressoft" level="INFO"/>
 
-    <root level="TRACE">
+    <root level="INFO">
         <appender-ref ref="STDOUT" />
     </root>
 </configuration>

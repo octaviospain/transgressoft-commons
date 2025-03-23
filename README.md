@@ -5,212 +5,248 @@ A reactive library for Kotlin & Java projects that implements the Publisher-Subs
 
 ## 📖 Overview
 
-Transgressoft Commons provides a layer of abstraction for entities that follow a 'reactive' approach based on the Publisher-Subscriber pattern. This allows objects to subscribe to changes in others while maintaining clean boundaries.
+Transgressoft Commons provides a framework for entities that follow a 'reactive' approach based on the Publisher-Subscriber pattern. This allows objects to subscribe to changes in others while maintaining clean boundaries and separation of concerns.
 
-The approach is inspired by object-oriented design principles where objects aren't merely passive data structures to be manipulated, but active entities with
-their own behaviors and responsibilities. Instead of other objects directly manipulating an entity's state, they subscribe to its changes, creating a more
-decoupled and maintainable system. Some of the books that have inspired this library
-are [Object Thinking by David West](https://www.goodreads.com/book/show/43940.Object_Thinking)
-and [Elegant Objects by Yegor Bugayenko](https://www.yegor256.com/elegant-objects.html)
+The approach is inspired by object-oriented design principles where entities aren't merely passive data structures, but active objects with their own behaviors and responsibilities. Instead of other objects directly manipulating an entity's state, they subscribe to its changes, creating a more decoupled and maintainable system.
 
 **Key Features:**
 
-* **Reactive Entities:** Implement entities that can notify subscribers of state changes.
-* **Event-Driven Architecture:** Utilizes the Publisher-Subscriber pattern for decoupled communication.
-* **Repository Pattern:** Provides flexible repository implementations for data management.
-* **Automatic Persistence:** Offers JSON file repositories for seamless data persistence.
-* **Reactive Primitives:** Wraps primitive data types for reactive behavior.
-* **Asynchronous Processing:** Many actions are performed asynchronously.
-* **Thread safety:** JsonFileRepository and FlexibleJsonFileRepository are thread safe.
+* **Event-Driven Architecture:** Built around the Publisher-Subscriber pattern for loosely coupled communication
+* **Reactive Entities:** Objects that automatically notify subscribers when their state changes
+* **Automated JSON Serialization:** Repository implementations that persist entity changes to JSON files automatically
+* **Thread-Safe Operations:** Concurrent operations are handled safely with debounced file I/O
+* **Repository Pattern:** Flexible data access through repositories with powerful querying capabilities
+* **Reactive Primitives:** Wrapper types that make primitive values observable
+* **Asynchronous Processing:** Non-blocking operations using Kotlin coroutines
+* **Java Interoperability:** Designed to work seamlessly from both Kotlin and Java code
 
 ## 📑 Table of Contents
 
-- [Quick Start](#-quick-start)
-- [Core Concepts](#-core-concepts)
-- [Repository Pattern](#-repository-pattern)
-- [Advanced Features](#-advanced-features)
-- [Reactive Primitives](#-reactive-primitives)
+- [Core Concepts: Reactive Event System](#-core-concepts-reactive-event-system)
+- [Core Concepts: JSON Serialization](#-core-concepts-json-serialization)
+- [Contributing](#-contributing)
+- [License and Attributions](#-license-and-attributions)
 
-## 🚀 Quick Start
+## 🔄 Core Concepts: Reactive Event System
 
-Here's a simple example demonstrating the core reactive capabilities:
+The heart of Transgressoft Commons is its reactive event system, where objects communicate through events rather than direct manipulation.
+
+### Reactive Primitives
+
+The simplest way to understand the reactive approach is through the primitive wrappers. These allow basic values to participate in the reactive system:
+
+```kotlin
+// Create a reactive primitive with an ID and initial value
+val appName: ReactivePrimitive<String> = ReactiveString("MyApp")
+
+// Subscribe to changes with a simple lambda function
+val subscription = appName.subscribe { event ->
+    val oldValue = event.oldEntities.values.first().value
+    val newValue = event.entities.values.first().value
+    println("Config changed: $oldValue -> $newValue")
+}
+
+// When value changes, subscribers are automatically notified
+appName.value = "NewAppName"  
+// Output: Config changed: MyApp -> NewAppName
+
+// Later, if needed, you can cancel the subscription
+subscription.cancel()
+```
+
+### Reactive Entities
+
+Any object can become reactive by implementing the `ReactiveEntity` interface, typically by extending `ReactiveEntityBase`:
 
 ```kotlin
 // Define a reactive entity
-data class Tenant(override val id: Int) : ReactiveEntityBase<Int, Tenant>() {
-    var name: String? = null
+data class Person(override val id: Int, var name: String) : ReactiveEntityBase<Int, Person>() {
+    var salary: Double = 0.0
         set(value) {
-            setAndNotify(value, field) { field = it }   // This triggers notifications
+            // setAndNotify handles the notification logic
+            setAndNotify(value, field) { field = it }
         }
 
-    override val uniqueId = "$id-$name"
-    override fun clone(): Tenant = copy()
-    override fun toString(): String = "Tenant(id=$id, name=$name)"
+    override val uniqueId: String = "person-$id"
+    override fun clone(): Person = copy()
 }
 
-// Create and subscribe
-val tenant = Tenant(1)
-val subscriber = EntityChangeSubscriber<Tenant, EntityChangeEvent<Int, Tenant>, Int>("subscriber").apply {
-    addOnNextEventAction(UPDATE) {
-        println("Received update event: $it")
+// Create a person and subscribe to changes using a Consumer
+val person: ReactiveEntity<Int, Person> = Person(1, "Alice")
+val subscription = person.subscribe { event ->
+    val entity = event.entities.values.first()
+    val oldEntity = event.oldEntities.values.first()
+    println("Salary updated from ${oldEntity.salary} to ${entity.salary}")
+}
+
+// Changes trigger notifications
+person.salary = 75000.0
+// Output: Salary updated from 0.0 to 75000.0
+```
+
+### Repository Subscriptions
+
+Repositories manage collections of entities while maintaining the reactive behavior:
+
+```kotlin
+// Create a repository for Person entities
+val repository: Repository<Int, Person> = VolatileRepository<Int, Person>("PersonRepository")
+
+// Subscribe to CRUD events with lambda functions
+val createSubscription = repository.subscribe(StandardCrudEvent.Type.CREATE) { event ->
+    println("Entities created: ${event.entities.values}")
+}
+
+val updateSubscription = repository.subscribe(StandardCrudEvent.Type.UPDATE) { event ->
+    val changeEvent = event as EntityChangeEvent<Int, Person>
+    println("Entities updated:")
+    changeEvent.entities.forEach { (id, entity) ->
+        val oldEntity = changeEvent.oldEntities[id]
+        println("  $id: $oldEntity -> $entity")
     }
 }
-tenant.subscribe(subscriber)
 
-// Changes automatically notify subscribers
-tenant.name = "John Doe"
-// Output: Received update event: Update(entities={1=Tenant(id=1, name=John Doe)}, oldEntities={1=Tenant(id=1, name=null)})
-```
-
-## 🏗️ Core Concepts
-
-### Reactive Architecture
-
-Transgressoft Commons is built around a fundamental principle: **objects should communicate through events rather than direct manipulation**. This creates several advantages:
-
-1. **Decoupling** - Objects don't need direct references to modify each other
-2. **Traceability** - All changes are explicitly published as events
-3. **Consistency** - State changes automatically trigger notifications
-4. **Persistence** - Events can be captured for audit trails or persistence
-
-### Publisher-Subscriber Pattern
-
-The library implements a robust Publisher-Subscriber pattern where:
-
-- **Publishers** (your domain objects) emit events when their state changes
-- **Subscribers** register interest in specific events and react accordingly
-- **Events** carry information about what changed and previous state
-
-### Entity Hierarchy
-
-The architecture builds on two key interfaces:
-
-```kotlin
-// Base for all entities that can be identified and subscribed to
-interface IdentifiableEntity<K> : TransEntity, Cloneable where K : Comparable<K> {
-    val id: K
-    val uniqueId: String
+val deleteSubscription = repository.subscribe(StandardCrudEvent.Type.DELETE) { event ->
+    println("Entities deleted: ${event.entities.values}")
 }
 
-// Entities that can publish change events to subscribers
-interface ReactiveEntity<K, R : ReactiveEntity<K, R>> : 
-    IdentifiableEntity<K>,
-    TransEventPublisher<EntityChangeEvent<K, R>>
+// Repository operations trigger events
+repository.add(Person(1, "Alice"))
+// Output: Entities created: [Person(id=1, name=Alice)]
+
+// Entity changes are propagated through the repository
+repository.runForSingle(1) { person ->
+    person.salary = 80000.0
+}
+// Output: Entities updated:
+//   1: Person(id=1, name=Alice, salary=0.0) -> Person(id=1, name=Alice, salary=80000.0)
 ```
 
-When you implement `ReactiveEntityBase`, you get automatic event publishing through the simple `setAndNotify()` method, which handles the complexity of cloning, comparing, and notifying subscribers.
+### Extensibility
 
-## 📚 Repository Pattern
+The library is designed to be extensible, allowing you to create custom publishers and subscribers:
 
-The library includes a powerful implementation of the Repository pattern that integrates seamlessly with the reactive approach.
+1. **Custom Publishers:** Implement `TransEventPublisher<E>` or extend `TransEventPublisherBase<E>` to create new event sources
+2. **Custom Subscribers:** Implement `TransEventSubscriber<T, E>` or extend `TransEventSubscriberBase<T, E>` to handle events
+3. **Custom Events:** Create new event types by implementing the `TransEvent` interface
 
-### Repository Types
-
-#### VolatileRepository
-
-For in-memory storage without persistence:
+For Java compatibility or more complex subscription handling, you can also implement a full subscriber:
 
 ```kotlin
-class UserRepository : VolatileRepository<String, User>("UserRepository")
+// Create a subscriber with more control over lifecycle events
+val repositorySubscriber: TransEventSubscriber<Person, CrudEvent<Int, Person>> = 
+    object : TransEventSubscriberBase<Person, CrudEvent<Int, Person>>("RepositorySubscriber") {
+        init {
+            // Set up subscription actions
+            addOnNextEventAction(StandardCrudEvent.Type.CREATE) { event ->
+                println("Entities created: ${event.entities.values}")
+            }
+            
+            addOnErrorEventAction { error ->
+                println("Error occurred: $error")
+            }
+            
+            addOnCompleteEventAction {
+                println("Publisher has completed sending events")
+            }
+        }
+    }
+
+// Subscribe using the full subscriber
+repository.subscribe(repositorySubscriber)
 ```
 
-#### JsonFileRepository
+The core API classes that library consumers will typically use:
 
-For JSON file-based persistence with automatic updates:
+- `TransEventPublisher` - Interface for objects that publish events
+- `TransEventSubscriber` - Interface for objects that subscribe to events
+- `ReactiveEntity` - Interface for entities that can be observed
+- `Repository` - Interface for collections of entities with CRUD operations
+- `CrudEvent` - Events representing repository operations
+- `JsonRepository` - Interface for repositories with JSON persistence
+
+## 💾 Core Concepts: JSON Serialization
+
+Transgressoft Commons provides automatic JSON serialization for repository operations, making persistence seamless. The library uses [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) for JSON processing, so users should familiarize themselves with this library to effectively create serializers for their entity types.
+
+### JSON File Repositories
+
+The library includes implementations that automatically persist entities to JSON files:
 
 ```kotlin
-// Create your repository class
-class PersonJsonFileRepository(file: File) : GenericJsonFileRepository<Int, Person>(
+// Define a serializer for your entity type using kotlinx.serialization
+@Serializable
+data class Person(val id: Int, val name: String, var salary: Double = 0.0) : ReactiveEntityBase<Int, Person>() {
+    override val uniqueId: String = "person-$id"
+    override fun clone(): Person = copy()
+}
+
+// Create a map serializer for your entities
+object MapIntPersonSerializer : KSerializer<Map<Int, Person>> {
+    // Serialization implementation details
+}
+
+// Define your repository class
+class PersonJsonFileRepository(file: File) : JsonFileRepositoryBase<Int, Person>(
+    name = "PersonRepository",
     file = file,
-    mapSerializer = MapIntPersonSerializer,
-    repositorySerializersModule = SerializersModule { /* Configuration */ },
-    name = "PersonRepository"
+    mapSerializer = MapIntPersonSerializer
 )
 
-// Usage example
-val repository = PersonJsonFileRepository(File("persons.json"))
-repository.add(Person(1, "Jane", 50000L, true))
+// Create and use the repository
+val jsonRepository: JsonRepository<Int, Person> = PersonJsonFileRepository(File("persons.json"))
+jsonRepository.add(Person(1, "Alice"))
+jsonRepository.add(Person(2, "Bob"))
 
-// Reactive updates
-val jane = repository.findById(1).orElseThrow()
-jane.money = 55000L  // JSON file is updated automatically
-```
-
-#### FlexibleJsonFileRepository
-
-For simpler storage of primitive values:
-
-```kotlin
-val repository = FlexibleJsonFileRepository(File("config.json"))
-
-// Create reactive primitives
-val appName = repository.createReactiveString("app.name", "MyApp")
-val maxConnections = repository.createReactiveInt("max.connections", 100)
-
-// Subscribe and update
-appName.subscribe(configSubscriber)
-appName.value = "NewAppName"  // Subscribers notified, JSON updated
-```
-
-## 🧩 Advanced Features
-
-### Event Subscription
-
-Subscribe to specific events from repositories or entities:
-
-```kotlin
-val subscriber = object : TransEventSubscriberBase<Person, CrudEvent<Int, Person>>("MySubscriber") {
-    init {
-        addOnNextEventAction(StandardCrudEvent.Type.CREATE) { event ->
-            println("Entity created: ${event.entities}")
-        }
-        addOnNextEventAction(StandardCrudEvent.Type.UPDATE) { event ->
-            val entityChangeEvent = event as EntityChangeEvent<Int, Person>
-            println("Entity updated from ${entityChangeEvent.oldEntities} to ${entityChangeEvent.entities}")
-        }
-    }
+// When entities change, the JSON file is automatically updated
+jsonRepository.runForSingle(1) { person ->
+    person.salary = 85000.0
 }
+
+// Changes are debounced to prevent excessive file operations
 ```
 
-### Batch Operations
+### Flexible JSON Repository
 
-Perform operations on multiple entities efficiently:
+For simpler use cases, the library provides a flexible repository for primitive values:
 
 ```kotlin
-repository.runForMany(setOf(1, 2)) { person ->
-    person.money = person.money!! * 1.1  // Give everyone a 10% raise
-}
+// Create a repository for configuration values
+val configRepository  = FlexibleJsonFileRepository(File("config.json"))
+
+// Create reactive primitives in the repository
+val serverName: ReactivePrimitive<String> = configRepository.createReactiveString("server.name", "MainServer")
+val maxConnections: ReactivePrimitive<Int> = configRepository.createReactiveInt("max.connections", 100)
+val debugMode: ReactivePrimitive<Boolean> = configRepository.createReactiveBoolean("debug.mode", false)
+
+// When values change, they are automatically persisted
+maxConnections.value = 150
+debugMode.value = true
+// The JSON file is updated with the new values
 ```
 
-### Querying Repositories
+### Key Benefits of Automatic Serialization
 
-Search for entities based on criteria:
+1. **Transparent Persistence** - No need to manually save changes
+2. **Optimized I/O** - Changes are debounced to reduce disk operations
+3. **Thread Safety** - Concurrent operations are handled safely
+4. **Consistency** - Repository and file are always in sync
 
-```kotlin
-val richPeople = repository.search { it.money!! > 60000L }
-```
-
-## 🧪 Reactive Primitives
-
-The library provides reactive wrappers for primitive values:
-
-```kotlin
-val appName = ReactiveString("app.name", "MyApp")
-val maxConnections = ReactiveInt("max.connections", 100)
-val debugMode = ReactiveBoolean("debug.mode", false)
-
-appName.subscribe(configSubscriber)
-appName.value = "NewAppName"  // Triggers notification
-```
+*Note: While the examples in this README are in Kotlin, the library is designed with Java compatibility in mind. Java usage examples will be provided in future documentation.*
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-## 📄 License and attributions
+## 📄 License and Attributions
 
 Copyright (c) 2025 Octavio Calleya García.
 
 Transgressoft Commons is free software under GNU GPL version 3 license and is available [here](https://www.gnu.org/licenses/gpl-3.0.en.html#license-text).
 
-This project uses [Jetbrain's coroutines](https://github.com/Kotlin/kotlinx.coroutines) and [serialization](https://github.com/Kotlin/kotlinx.serialization) libraries, and [Kotest](https://kotest.io/) for testing.
+This project uses:
+- [Kotlin Coroutines](https://github.com/Kotlin/kotlinx.coroutines) for asynchronous programming
+- [Kotlin Serialization](https://github.com/Kotlin/kotlinx.serialization) for JSON processing
+- [Kotest](https://kotest.io/) for testing
+
+The approach is inspired by books including [Object Thinking by David West](https://www.goodreads.com/book/show/43940.Object_Thinking) and [Elegant Objects by Yegor Bugayenko](https://www.yegor256.com/elegant-objects.html).

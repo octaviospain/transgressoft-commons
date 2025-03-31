@@ -18,8 +18,6 @@
 package net.transgressoft.commons.persistence.json.primitives
 
 import net.transgressoft.commons.persistence.ReactivePrimitiveWrapper
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * A reactive wrapper for String values.
@@ -32,9 +30,6 @@ import kotlin.uuid.Uuid
  * @param initialValue The initial string value, can be null
  */
 class ReactiveString internal constructor(id: String, initialValue: String?) : ReactivePrimitiveWrapper<ReactiveString, String>(id, initialValue) {
-
-    @ExperimentalUuidApi
-    constructor(value: String?) : this(Uuid.random().toString(), value)
 
     override fun hashCode() = (id.hashCode() + value.hashCode()) * 31
 

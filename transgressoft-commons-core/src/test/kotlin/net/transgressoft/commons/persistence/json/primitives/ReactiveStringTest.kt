@@ -14,11 +14,9 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContainOnly
 import io.kotest.matchers.date.shouldBeAfter
 import io.kotest.matchers.equals.shouldBeEqual
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.uuid.ExperimentalUuidApi
 
 private class ReactiveStringSubscriber :
     TransEventSubscriberBase<ReactivePrimitive<String>, CrudEvent<String, ReactivePrimitive<String>>>("subscriber") {
@@ -34,7 +32,6 @@ private class ReactiveStringSubscriber :
     }
 }
 
-@OptIn(ExperimentalUuidApi::class)
 class ReactiveStringTest : StringSpec({
 
     "Changes on reactive string propagate to subscribers" {
@@ -71,8 +68,5 @@ class ReactiveStringTest : StringSpec({
         reactiveString.value shouldBe null
         reactiveString.uniqueId shouldBe "1-null"
         reactiveString.toString() shouldBe "ReactiveString(id=1, value=null)"
-
-        val reactiveStringWithRandomULID = ReactiveString("string")
-        reactiveStringWithRandomULID.shouldNotBeNull()
     }
 })

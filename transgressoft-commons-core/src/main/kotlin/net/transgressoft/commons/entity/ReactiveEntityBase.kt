@@ -44,11 +44,11 @@ import kotlinx.coroutines.flow.SharedFlow
  * @see EntityChangeEvent
  */
 abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
-    private val publisher: TransEventPublisher<EntityChangeEvent<K, R>> = FlowEventPublisher()
+    private val publisher: TransEventPublisher<EntityChangeEvent<K, R>>
 ) : ReactiveEntity<K, R> where K : Comparable<K> {
     private val log = KotlinLogging.logger {}
 
-    protected constructor() : this(FlowEventPublisher())
+    protected constructor() : this(FlowEventPublisher("ReactiveEntityFlowPublisher"))
 
     init {
         publisher.activateEvents(UPDATE)
@@ -94,11 +94,7 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
             propertySetAction.accept(newValue)
             lastDateModified = LocalDateTime.now()
             log.trace { "Firing entity update event from $entityBeforeChange to $this" }
-            val event =
-                UPDATE.of(
-                    mapOf(id to this),
-                    mapOf(entityBeforeChange.id to entityBeforeChange)
-                ) as EntityChangeEvent<K, R>
+            val event = UPDATE.of(this, entityBeforeChange) as EntityChangeEvent<K, R>
 
             publisher.emitAsync(event)
         }

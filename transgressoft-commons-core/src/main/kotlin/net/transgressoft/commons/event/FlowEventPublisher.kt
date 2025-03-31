@@ -18,13 +18,10 @@
 package net.transgressoft.commons.event
 
 import net.transgressoft.commons.entity.TransEntity
-import net.transgressoft.commons.persistence.ReactiveScope
 import mu.KotlinLogging
 import java.util.concurrent.ConcurrentSkipListSet
 import java.util.concurrent.Flow
 import java.util.function.Consumer
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -56,140 +53,137 @@ import kotlinx.coroutines.launch
  * @see [TransEventPublisher]
  * @see [SharedFlow]
  */
-class FlowEventPublisher<E : TransEvent>
-    @OptIn(ExperimentalUuidApi::class)
-    constructor(val name: String = Uuid.random().toString())
-    : TransEventPublisher<E> {
+class FlowEventPublisher<E: TransEvent>(id: String): TransEventPublisher<E> {
 
-        private val log = KotlinLogging.logger {}
+    private val log = KotlinLogging.logger {}
 
-        /**
-         * Channel for processing events with unlimited buffer capacity.
-         *
-         * This unlimited buffer ensures that events are never dropped during high-traffic
-         * periods or bursts of activity. When the processing rate catches up after a burst,
-         * the memory used by processed events becomes eligible for garbage collection.
-         *
-         * This approach prioritizes reliable event delivery over fixed memory constraints.
-         */
-        private val eventChannel = Channel<E>(Channel.UNLIMITED)
+    private val name: String = "FlowEventPublisher-$id"
 
-        // SharedFlow for entity change events with sufficient buffer and SUSPEND policy to ensure no events are lost
-        private val changesFlow =
-            MutableSharedFlow<E>(
-                // Increasing this enables an 'object history' by replayed events. TBD
-                replay = 0,
-                // Larger buffer to handle bursts
-                extraBufferCapacity = 5120,
-                // Block until buffer space is available
-                onBufferOverflow = BufferOverflow.SUSPEND
-            )
+    /**
+     * Channel for processing events with unlimited buffer capacity.
+     *
+     * This unlimited buffer ensures that events are never dropped during high-traffic
+     * periods or bursts of activity. When the processing rate catches up after a burst,
+     * the memory used by processed events becomes eligible for garbage collection.
+     *
+     * This approach prioritizes reliable event delivery over fixed memory constraints.
+     */
+    private val eventChannel = Channel<E>(Channel.UNLIMITED)
 
-        override val changes: SharedFlow<E> = changesFlow.asSharedFlow()
+    // SharedFlow for entity change events with sufficient buffer and SUSPEND policy to ensure no events are lost
+    private val changesFlow =
+        MutableSharedFlow<E>(
+            // Increasing this enables an 'object history' by replayed events. TBD
+            replay = 0,
+            // Larger buffer to handle bursts
+            extraBufferCapacity = 5120,
+            // Block until buffer space is available
+            onBufferOverflow = BufferOverflow.SUSPEND
+        )
 
-        /**
-         * The coroutine scope used for emitting change events.
-         */
-        private val flowScope = ReactiveScope.flowScope()
+    override val changes: SharedFlow<E> = changesFlow.asSharedFlow()
 
-        private var activatedEventTypes: MutableSet<EventType> = ConcurrentSkipListSet()
+    /**
+     * The coroutine scope used for emitting change events.
+     */
+    private val flowScope = ReactiveScope.flowScope()
 
-        init {
-            // Create a single persistent coroutine to handle all emissions for a fire and forget approach
-            flowScope.launch {
-                for (event in eventChannel) {
-                    try {
-                        changesFlow.emit(event) // This suspends if needed
-                    } catch (exception: Exception) {
-                        log.error(exception) { "Unexpected error during event emission: $event" }
-                    }
+    private var activatedEventTypes: MutableSet<EventType> = ConcurrentSkipListSet()
+
+    init {
+        log.trace { "FlowEventPublisher created: $name" }
+
+        // Create a single persistent coroutine to handle all emissions for a fire and forget approach
+        flowScope.launch {
+            for (event in eventChannel) {
+                try {
+                    changesFlow.emit(event) // This suspends if needed
+                } catch (exception: Exception) {
+                    log.error(exception) { "Unexpected error during event emission: $event" }
                 }
-            }
-        }
-
-        override fun emitAsync(event: E) {
-            if (activatedEventTypes.contains(event.type)) {
-                // Use trySend so we don't block the caller
-                // If channel is full, this will return closed/failed result
-                val result = eventChannel.trySend(event)
-                if (!result.isSuccess) {
-                    log.warn { "Could not send event to channel, buffer full or closed: $event" }
-                }
-            }
-        }
-
-        /**
-         * Legacy compatibility method to support the existing [Flow.Subscriber] interface.
-         * Consider migrating to the Kotlin Flow-based subscription method instead.
-         */
-        override fun subscribe(subscriber: Flow.Subscriber<in E>) {
-            log.trace { "Subscription registered to $subscriber" }
-
-            val job =
-                flowScope.launch {
-                    changes.collect { event ->
-                        subscriber.onNext(event)
-                    }
-                }
-
-            subscriber.onSubscribe(ReactiveSubscription<TransEntity>(this, job))
-        }
-
-        /**
-         * Subscribes to entity change events by providing an action to execute when changes occur.
-         *
-         * @param action The action to execute when the entity changes
-         * @return A subscription that can be used to unsubscribe
-         */
-        override fun subscribe(action: suspend (E) -> Unit): TransEventSubscription<in TransEntity> {
-            log.trace { "Subscription registered with action" }
-
-            // Each subscription requires its own collection coroutine to handle events independently
-            // This is a deliberate design pattern for reactive subscriptions
-            @Suppress("kotlin:S6311")
-            val job =
-                flowScope.launch {
-                    changes.collectLatest { event ->
-                        action(event)
-                    }
-                }
-            return ReactiveSubscription(this, job)
-        }
-
-        /**
-         * Legacy compatibility method for Java-style Consumer subscriptions.
-         * Consider migrating to the Kotlin Flow-based subscription method instead.
-         */
-        override fun subscribe(action: Consumer<in E>): TransEventSubscription<in TransEntity> =
-            subscribe { event -> action.accept(event) }
-
-        override fun disableEvents(vararg types: EventType) {
-            types.toSet().let {
-                activatedEventTypes.removeAll(it)
-                log.trace { "Event Types $it disabled from $name. Current active event types: $activatedEventTypes" }
-            }
-        }
-
-        override fun activateEvents(vararg types: EventType) {
-            types.toSet().let {
-                activatedEventTypes.addAll(it)
-                log.trace { "Event Types $it enabled from $name. Current active event types: $activatedEventTypes" }
-            }
-        }
-
-        override fun toString() = "FlowEventPublisher(id=$name, activatedEventTypes=$activatedEventTypes)"
-
-        inner class ReactiveSubscription<T : TransEntity>(
-            override val source: TransEventPublisher<E>,
-            private val job: Job
-        ) : TransEventSubscription<T> {
-
-            override fun request(n: Long) {
-                error("Events cannot be requested on demand")
-            }
-
-            override fun cancel() {
-                job.cancel()
             }
         }
     }
+
+    override fun emitAsync(event: E) {
+        if (event.type in activatedEventTypes) {
+            // Use trySend so we don't block the caller
+            // If channel is full, this will return closed/failed result
+            val result = eventChannel.trySend(event)
+            if (!result.isSuccess) {
+                log.warn { "Could not send event to channel, buffer full or closed: $event" }
+            }
+        }
+    }
+
+    /**
+     * Legacy compatibility method to support the existing [Flow.Subscriber] interface.
+     * Consider migrating to the Kotlin Flow-based subscription method instead.
+     */
+    override fun subscribe(subscriber: Flow.Subscriber<in E>) {
+        log.trace { "Subscription registered to $subscriber" }
+
+        val job =
+            flowScope.launch {
+                changesFlow.collectLatest { event ->
+                    subscriber.onNext(event)
+                }
+            }
+
+        subscriber.onSubscribe(ReactiveSubscription<TransEntity>(this, job))
+    }
+
+    /**
+     * Subscribes to entity change events by providing an action to execute when changes occur.
+     *
+     * @param action The action to execute when the entity changes
+     * @return A subscription that can be used to unsubscribe
+     */
+    override fun subscribe(action: suspend (E) -> Unit): TransEventSubscription<in TransEntity> {
+        log.trace { "Anonymous subscription registered on $name" }
+
+        // Each subscription requires its own collection coroutine to handle events independently
+        // This is a deliberate design pattern for reactive subscriptions
+        @Suppress("kotlin:S6311")
+        val job =
+            flowScope.launch {
+                changesFlow.collectLatest { event ->
+                    action(event)
+                }
+            }
+        return ReactiveSubscription(this, job)
+    }
+
+    /**
+     * Legacy compatibility method for Java-style Consumer subscriptions.
+     * Consider migrating to the Kotlin Flow-based subscription method instead.
+     */
+    override fun subscribe(action: Consumer<in E>): TransEventSubscription<in TransEntity> = subscribe { event -> action.accept(event) }
+
+    override fun disableEvents(vararg types: EventType) {
+        types.toSet().let {
+            activatedEventTypes.removeAll(it)
+            log.trace { "Enabled event types from $name: $activatedEventTypes" }
+        }
+    }
+
+    override fun activateEvents(vararg types: EventType) {
+        types.toSet().let {
+            activatedEventTypes.addAll(it)
+            log.trace { "Enabled event types from $name: $activatedEventTypes" }
+        }
+    }
+
+    override fun toString() = "FlowEventPublisher(id=$name, activatedEventTypes=$activatedEventTypes)"
+
+    inner class ReactiveSubscription<T: TransEntity>(override val source: TransEventPublisher<E>, private val job: Job): TransEventSubscription<T> {
+
+        override fun request(n: Long) {
+            error("Events cannot be requested on demand")
+        }
+
+        override fun cancel() {
+            job.cancel()
+        }
+    }
+}

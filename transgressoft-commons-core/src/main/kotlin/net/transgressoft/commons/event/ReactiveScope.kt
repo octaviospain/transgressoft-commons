@@ -15,12 +15,33 @@
  *     along with this program.  If not, see <https://www.gnu.org/licenses/>. *
  ******************************************************************************/
 
-package net.transgressoft.commons.persistence
+package net.transgressoft.commons.event
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
+/**
+ * Centralized manager for coroutine scopes used throughout the reactive system.
+ *
+ * This singleton object provides standardized coroutine scopes for different types of operations
+ * in the reactive framework:
+ *
+ * - Flow processing: For handling event flows, subscriptions, and reactive updates
+ * - I/O operations: For file access, serialization, and other potentially blocking operations
+ *
+ * By centralizing scope management, ReactiveScope ensures:
+ * 1. Consistent behavior across the reactive system
+ * 2. Proper resource utilization with controlled parallelism
+ * 3. Easy configuration for testing with test dispatchers
+ * 4. Clean cancellation of ongoing operations when needed
+ *
+ * The default scopes use limited parallelism to prevent resource exhaustion while
+ * maintaining responsive operation.
+ *
+ * @see flowScope
+ * @see ioScope
+ */
 object ReactiveScope {
     // Default scope with limited parallelism to prevent resource exhaustion
     // but ensuring all entity events are processed

@@ -2,12 +2,13 @@ package net.transgressoft.commons.entity
 
 import net.transgressoft.commons.event.CrudEvent
 import net.transgressoft.commons.event.EntityChangeEvent
+import net.transgressoft.commons.event.FlowEventPublisher
+import net.transgressoft.commons.event.ReactiveScope
 import net.transgressoft.commons.event.StandardCrudEvent
 import net.transgressoft.commons.event.isCreate
 import net.transgressoft.commons.event.isDelete
 import net.transgressoft.commons.event.isUpdate
 import net.transgressoft.commons.persistence.CrudEventPublisherBase
-import net.transgressoft.commons.persistence.ReactiveScope
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -305,7 +306,7 @@ class ReactiveEntityTest : StringSpec({
     }
 })
 
-class TestEntity(override val id: String) : ReactiveEntityBase<String, TestEntity>() {
+class TestEntity(override val id: String) : ReactiveEntityBase<String, TestEntity>(FlowEventPublisher(id)) {
     var name: String = "Initial Name"
         set(value) {
             setAndNotify(value, field) { field = it }

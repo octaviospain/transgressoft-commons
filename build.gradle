@@ -4,7 +4,6 @@ import org.jlleitschuh.gradle.ktlint.reporter.ReporterType
 
 plugins {
     id 'jacoco-report-aggregation'
-    id 'maven-publish'
     id 'org.jetbrains.dokka' version '1.9.20'
     id 'org.jetbrains.kotlin.jvm' version '2.1.10'
     id 'org.jetbrains.kotlin.plugin.serialization' version '2.1.10'
@@ -17,10 +16,16 @@ repositories {
     mavenCentral()
 }
 
+ext {
+    kotlinVersion = '2.1.10'
+    coroutinesVersion = '1.10.1'
+    kotestVersion = '5.9.1'
+}
+
 dependencies {
     implementation project(':transgressoft-commons-api')
     implementation project(':transgressoft-commons-core')
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
+    api "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
 }
 
 kotlin {
@@ -29,11 +34,6 @@ kotlin {
 
 tasks.named('jar').configure {
     enabled = false
-}
-
-ext {
-    kotlinVersion = '2.1.10'
-    kotestVersion = '5.9.1'
 }
 
 scmVersion {
@@ -68,7 +68,6 @@ tasks.named('check') {
 subprojects {
 
     apply plugin: 'jacoco'
-    apply plugin: 'java'
     apply plugin: 'kotlin'
     apply plugin: 'maven-publish'
     apply plugin: 'org.jetbrains.dokka'
@@ -80,14 +79,14 @@ subprojects {
     project.version = rootProject.version
 
     dependencies {
-        implementation platform('org.jetbrains.kotlin:kotlin-bom')
-        implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1'
-
+        implementation platform("org.jetbrains.kotlin:kotlin-bom:$kotlinVersion")
+        api platform("org.jetbrains.kotlinx:kotlinx-coroutines-bom:$coroutinesVersion")
+        api 'org.jetbrains.kotlinx:kotlinx-coroutines-core'
     }
 
     repositories {
         mavenCentral()
-        maven { url 'https://jitpack.io' }
+        maven { url = 'https://jitpack.io' }
     }
 
     java {

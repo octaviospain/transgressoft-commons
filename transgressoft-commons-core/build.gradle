@@ -1,11 +1,12 @@
-description "Transgressoft Commons Core"
+description = 'Transgressoft Commons Core'
 
 dependencies {
     api project(path: ':transgressoft-commons-api')
+    api "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
+
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
     implementation 'io.github.microutils:kotlin-logging-jvm:3.0.5'
     implementation "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion"
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0'
     testImplementation 'ch.qos.logback:logback-core:1.5.16'
     testImplementation "io.kotest:kotest-assertions-core:$kotestVersion"

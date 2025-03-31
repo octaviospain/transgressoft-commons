@@ -48,6 +48,9 @@ jobs:
                 restore-keys: |
                     ${{ runner.os }}-gradle-
 
+        -   name: Verify Build
+            run: ./gradlew compileKotlin compileTestKotlin test
+
         -   name: Release
             if: github.event_name == 'push' && github.ref == 'refs/heads/master'
             env:

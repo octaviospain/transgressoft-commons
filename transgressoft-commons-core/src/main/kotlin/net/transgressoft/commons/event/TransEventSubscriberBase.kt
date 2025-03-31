@@ -62,7 +62,7 @@ abstract class TransEventSubscriberBase<T : TransEntity, E : TransEvent>(protect
 
     final override fun addOnNextEventAction(vararg eventTypes: EventType, action: Consumer<E>) {
         eventTypes.forEach {
-            if (!onNextEventActions.contains(it)) {
+            if (it !in onNextEventActions) {
                 onNextEventActions[it] = mutableListOf(action)
             } else {
                 onNextEventActions[it]?.add(action)

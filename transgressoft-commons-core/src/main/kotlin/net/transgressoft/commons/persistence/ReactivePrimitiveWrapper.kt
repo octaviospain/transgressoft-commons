@@ -18,6 +18,7 @@
 package net.transgressoft.commons.persistence
 
 import net.transgressoft.commons.entity.ReactiveEntityBase
+import net.transgressoft.commons.event.FlowEventPublisher
 
 /**
  * Abstract base class for reactive primitive wrappers that implements common functionality.
@@ -34,7 +35,7 @@ import net.transgressoft.commons.entity.ReactiveEntityBase
 abstract class ReactivePrimitiveWrapper<R : ReactivePrimitiveWrapper<R, V>, V : Comparable<V>>(
     override val id: String,
     initialValue: V?
-) : ReactiveEntityBase<String, ReactivePrimitive<V>>(), ReactivePrimitive<V> {
+) : ReactiveEntityBase<String, ReactivePrimitive<V>>(FlowEventPublisher(id)), ReactivePrimitive<V> {
     /**
      * The current value of this reactive primitive.
      *

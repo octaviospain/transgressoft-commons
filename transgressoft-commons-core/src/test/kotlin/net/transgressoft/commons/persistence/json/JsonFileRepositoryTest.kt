@@ -7,9 +7,9 @@ import net.transgressoft.commons.PersonJsonFileRepository
 import net.transgressoft.commons.Personly
 import net.transgressoft.commons.arbitraryPerson
 import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.ReactiveScope
 import net.transgressoft.commons.event.StandardCrudEvent.Type.CREATE
 import net.transgressoft.commons.event.TransEventSubscription
-import net.transgressoft.commons.persistence.ReactiveScope
 import io.kotest.assertions.json.shouldEqualJson
 import io.kotest.assertions.json.shouldNotEqualJson
 import io.kotest.assertions.nondeterministic.eventually
@@ -31,7 +31,7 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.forEach
 import kotlin.random.Random
-import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,7 +39,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@ExperimentalCoroutinesApi
 class JsonFileRepositoryTest: StringSpec({
 
     val testDispatcher = UnconfinedTestDispatcher()
@@ -113,7 +113,7 @@ class JsonFileRepositoryTest: StringSpec({
         secondRepository.close()
     }
 
-    "Person repository is initialized from existing json data and persist new elements into it" {
+    "Person repository is initialized from existing json, modify and persist elements into it" {
         val person = arbitraryPerson().next()
         jsonFile.writeText(
             """
@@ -134,19 +134,38 @@ class JsonFileRepositoryTest: StringSpec({
         testDispatcher.scheduler.advanceUntilIdle()
         repository.findById(person.id) shouldBePresent { it shouldBe person }
 
+        val deserializedPerson = repository.findById(person.id).get()
+        deserializedPerson.name = "name changed"
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        repository.findFirst { it.name == "name changed" } shouldBePresent { it shouldBe deserializedPerson }
+
+        var expectedRepositoryJson =
+            """
+            {
+                "${deserializedPerson.id}": {
+                    "type": "Person",
+                    "id": ${deserializedPerson.id},
+                    "name": "name changed",
+                    "money": ${deserializedPerson.money},
+                    "morals": ${deserializedPerson.morals}
+                }
+            }"""
+        jsonFile.readText().shouldEqualJson(expectedRepositoryJson)
+
         val person2 = arbitraryPerson().next()
         repository.addOrReplaceAll(setOf(person2))
 
         testDispatcher.scheduler.advanceUntilIdle()
 
-        val expectedRepositoryJson = """
+        expectedRepositoryJson = """
             {
-                "${person.id}": {
+                "${deserializedPerson.id}": {
                     "type": "Person",
-                    "id": ${person.id},
-                    "name": "${person.name}",
-                    "money": ${person.money},
-                    "morals": ${person.morals}
+                    "id": ${deserializedPerson.id},
+                    "name": "${deserializedPerson.name}",
+                    "money": ${deserializedPerson.money},
+                    "morals": ${deserializedPerson.morals}
                 },
                 "${person2.id}": {
                     "type": "Person",
@@ -242,6 +261,7 @@ class JsonFileRepositoryTest: StringSpec({
         }"""
 
         jsonFile.readText().shouldEqualJson(expectedRepositoryJson)
+        repository.findFirst { it.name == "John Namechanged" } shouldBePresent { it shouldBe person }
     }
 
     "Repository serializes itself when entity is modified during an action on the repository" {
@@ -369,8 +389,8 @@ class JsonFileRepositoryTest: StringSpec({
 
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Verify all entities in create events match original entities
-        eventually(1.seconds) {
+        // All entities in the events match original entities
+        eventually(500.milliseconds) {
             val createdEntityIds = events.flatMap { it.entities.keys }
             createdEntityIds shouldContainAll testPeople.map { it.id }
 

@@ -18,8 +18,8 @@
 package net.transgressoft.commons.persistence.json
 
 import net.transgressoft.commons.entity.ReactiveEntity
+import net.transgressoft.commons.event.ReactiveScope
 import net.transgressoft.commons.event.TransEventSubscription
-import net.transgressoft.commons.persistence.ReactiveScope
 import net.transgressoft.commons.persistence.RepositoryBase
 import mu.KotlinLogging
 import java.io.File
@@ -28,6 +28,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
@@ -72,7 +73,7 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
                 "Provided jsonFile does not exist, is not writable, is not a json file, or is not empty"
             }
             field = value
-            triggerSerialization()
+            serializationEventChannel.trySend(Unit)
             log.info { "jsonFile set to $value" }
         }
 
@@ -84,15 +85,6 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
             allowStructuredMapKeys = true
         }
 
-    init {
-        require(this.jsonFile.exists().and(this.jsonFile.canWrite()).and(this.jsonFile.extension == "json")) {
-            "Provided jsonFile does not exist, is not writable or is not a json file"
-        }
-
-        // Load entities from JSON file on initialization
-        decodeFromJson()?.let { entitiesById.putAll(it) }
-    }
-
     /**
      * The coroutine scope used for file I/O operations. Defaults to a scope with
      * limitedParallelism(1) on the IO dispatcher to ensure sequential file access and thread safety.
@@ -100,6 +92,51 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
      * @see [ReactiveScope]
      */
     private val ioScope: CoroutineScope = ReactiveScope.ioScope()
+
+    /**
+     * This coroutine scope is used to handle all emissions to the
+     * json serialization job for a fire and forget approach
+     */
+    private val flowScope: CoroutineScope = ReactiveScope.flowScope()
+
+    private val serializationEventChannel = Channel<Unit>(Channel.CONFLATED)
+
+    /**
+     * Subscriptions map for each entity in the repository is needed in order to unsubscribe
+     * from their changes once they are removed.
+     */
+    private val subscriptionsMap: MutableMap<K, TransEventSubscription<in R>> = ConcurrentHashMap()
+
+    init {
+        require(jsonFile.exists().and(jsonFile.canWrite()).and(jsonFile.extension == "json")) {
+            "Provided jsonFile does not exist, is not writable or is not a json file"
+        }
+
+        flowScope.launch {
+            for (event in serializationEventChannel) {
+                try {
+                    serializationTrigger.emit(event)
+                } catch (exception: Exception) {
+                    log.error(exception) { "Unexpected error during serialization" }
+                }
+            }
+        }
+
+        // Load entities from JSON file on initialization and create subscriptions
+        decodeFromJson()?.let { loadedEntities ->
+            log.info { "${loadedEntities.size} objects deserialized from file $jsonFile" }
+
+            entitiesById.putAll(loadedEntities)
+
+            // Create subscriptions for loaded entities
+            flowScope.launch {
+                entitiesById.values.forEach { entity ->
+                    val subscription = entity.subscribe { serializationEventChannel.trySend(Unit) }
+                    subscriptionsMap[entity.id] = subscription
+                }
+            }
+        }
+    }
 
     /**
      * Shared flow used to trigger serialization of the repository state. Debounced to avoid
@@ -118,12 +155,6 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
                     performSerialization()
                 }
         }
-
-    /**
-     * Subscriptions map for each entity in the repository is needed in order to unsubscribe
-     * from their changes once they are removed.
-     */
-    private val subscriptionsMap: MutableMap<K, TransEventSubscription<in R>> = ConcurrentHashMap()
 
     private suspend fun performSerialization() {
         try {
@@ -148,39 +179,34 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
         runBlocking {
             // Ensure any pending serialization is performed
             performSerialization()
-            serializationJob.cancel()
         }
+        serializationJob.cancel()
     }
 
     override fun add(entity: R) =
         super.add(entity).also { added ->
             if (added) {
-                triggerSerialization()
-                val subscription = entity.subscribe { triggerSerialization() }
+                serializationEventChannel.trySend(Unit)
+                val subscription = entity.subscribe { serializationEventChannel.trySend(Unit) }
                 subscriptionsMap[entity.id] = subscription
             }
         }
 
-    protected fun triggerSerialization() {
-        ioScope.launch {
-            serializationTrigger.emit(Unit)
-        }
-    }
-
     override fun addOrReplace(entity: R) =
         super.addOrReplace(entity).also { added ->
             if (added) {
-                triggerSerialization()
-                entity.subscribe { triggerSerialization() }
+                serializationEventChannel.trySend(Unit)
+                val subscription = entity.subscribe { serializationEventChannel.trySend(Unit) }
+                subscriptionsMap[entity.id] = subscription
             }
         }
 
     override fun addOrReplaceAll(entities: Set<R>) =
         super.addOrReplaceAll(entities).also { added ->
             if (added) {
-                triggerSerialization()
+                serializationEventChannel.trySend(Unit)
                 entities.forEach { entity ->
-                    val subscription = entity.subscribe { triggerSerialization() }
+                    val subscription = entity.subscribe { serializationEventChannel.trySend(Unit) }
                     subscriptionsMap[entity.id] = subscription
                 }
             }
@@ -189,7 +215,7 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
     override fun remove(entity: R) =
         super.remove(entity).also { removed ->
             if (removed) {
-                triggerSerialization()
+                serializationEventChannel.trySend(Unit)
                 subscriptionsMap[entity.id]?.cancel() ?: error("Repository should contain a subscription for $entity")
             }
         }
@@ -197,13 +223,13 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
     override fun removeAll(entities: Set<R>) =
         super.removeAll(entities).also { removed ->
             if (removed) {
-                triggerSerialization()
+                serializationEventChannel.trySend(Unit)
                 entities.forEach { subscriptionsMap[it.id]?.cancel() ?: error("Repository should contain a subscription for $it") }
             }
         }
 
     override fun clear() {
         super.clear()
-        triggerSerialization()
+        serializationEventChannel.trySend(Unit)
     }
 }

@@ -24,14 +24,14 @@ package net.transgressoft.commons.entity
  */
 interface IdentifiableEntity<K> : TransEntity, Cloneable where K : Comparable<K> {
     /**
-     * The id of the entity. It could be different for different [net.transgressoft.commons.data.Repository]
+     * The id of the entity. It could be different for different [net.transgressoft.commons.persistence.Repository]
      * implementations.
      */
     val id: K
 
     /**
      * The unique id of the entity. It should be unique across all entities of the same type and across all
-     * [net.transgressoft.commons.data.Repository] objects in which the entity could be stored.
+     * [net.transgressoft.commons.persistence.Repository] objects in which the entity could be stored.
      */
     val uniqueId: String
 

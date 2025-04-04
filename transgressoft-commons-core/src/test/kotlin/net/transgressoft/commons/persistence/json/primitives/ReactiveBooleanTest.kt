@@ -1,10 +1,10 @@
 package net.transgressoft.commons.persistence.json.primitives
 
 import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.CrudEvent.Type.CREATE
+import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.EventType
-import net.transgressoft.commons.event.StandardCrudEvent.Type.CREATE
-import net.transgressoft.commons.event.StandardCrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.TransEventSubscriberBase
 import net.transgressoft.commons.event.TransEventSubscription
 import net.transgressoft.commons.persistence.ReactivePrimitive
@@ -21,8 +21,8 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
 
 private class ReactiveBooleanSubscriber :
-    TransEventSubscriberBase<ReactivePrimitive<Boolean>, CrudEvent<String, ReactivePrimitive<Boolean>>>("subscriber") {
-    var subscriptionReceived: TransEventSubscription<ReactivePrimitive<Boolean>>? = null
+    TransEventSubscriberBase<ReactivePrimitive<Boolean>, CrudEvent.Type, CrudEvent<String, ReactivePrimitive<Boolean>>>("subscriber") {
+    var subscriptionReceived: TransEventSubscription<ReactivePrimitive<Boolean>, CrudEvent.Type, CrudEvent<String, ReactivePrimitive<Boolean>>>? = null
     val receivedEvents = mutableMapOf<EventType, CrudEvent<String, ReactivePrimitive<Boolean>>>()
 
     init {

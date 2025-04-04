@@ -29,9 +29,10 @@ import kotlinx.coroutines.flow.SharedFlow
  * events to interested subscribers. It serves as a bridge between the standard
  * Java Flow API and transgressoft-commons event system.
  *
+ * @param ET The specific type of [EventType] associated with this publisher
  * @param E The specific type of [TransEvent] published by this publisher
  */
-interface TransEventPublisher<E : TransEvent> : Flow.Publisher<E> {
+interface TransEventPublisher<ET : EventType, E : TransEvent<ET>> : Flow.Publisher<E> {
 
     /**
      * A flow of entity change events that can be observed by collectors.
@@ -43,11 +44,17 @@ interface TransEventPublisher<E : TransEvent> : Flow.Publisher<E> {
      */
     fun emitAsync(event: E)
 
-    fun subscribe(action: suspend (E) -> Unit): TransEventSubscription<in TransEntity>
+    fun subscribe(action: suspend (E) -> Unit): TransEventSubscription<in TransEntity, ET, E>
 
-    fun subscribe(action: Consumer<in E>): TransEventSubscription<in TransEntity>
+    /**
+     * Legacy compatibility method for Java-style Consumer subscriptions.
+     * Consider migrating to the Kotlin Flow-based subscription method instead.
+     */
+    fun subscribe(action: Consumer<in E>): TransEventSubscription<in TransEntity, ET, E> = subscribe(action::accept)
 
-    fun activateEvents(vararg types: EventType)
+    fun subscribe(vararg eventTypes: ET, action: suspend (E) -> Unit): TransEventSubscription<in TransEntity, ET, E>
 
-    fun disableEvents(vararg types: EventType)
+    fun activateEvents(vararg types: ET)
+
+    fun disableEvents(vararg types: ET)
 }

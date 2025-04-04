@@ -1,10 +1,10 @@
 package net.transgressoft.commons.persistence.json.primitives
 
 import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.CrudEvent.Type.CREATE
+import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.EventType
-import net.transgressoft.commons.event.StandardCrudEvent.Type.CREATE
-import net.transgressoft.commons.event.StandardCrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.TransEventSubscriberBase
 import net.transgressoft.commons.event.TransEventSubscription
 import net.transgressoft.commons.persistence.ReactivePrimitive
@@ -20,8 +20,8 @@ import io.kotest.matchers.shouldNotBe
 import kotlin.time.Duration.Companion.milliseconds
 
 private class ReactiveIntSubscriber :
-    TransEventSubscriberBase<ReactivePrimitive<Int>, CrudEvent<String, ReactivePrimitive<Int>>>("subscriber") {
-    var subscriptionReceived: TransEventSubscription<ReactivePrimitive<Int>>? = null
+    TransEventSubscriberBase<ReactivePrimitive<Int>, CrudEvent.Type, CrudEvent<String, ReactivePrimitive<Int>>>("subscriber") {
+    var subscriptionReceived: TransEventSubscription<ReactivePrimitive<Int>, CrudEvent.Type, CrudEvent<String, ReactivePrimitive<Int>>>? = null
     val receivedEvents = mutableMapOf<EventType, CrudEvent<String, ReactivePrimitive<Int>>>()
 
     init {

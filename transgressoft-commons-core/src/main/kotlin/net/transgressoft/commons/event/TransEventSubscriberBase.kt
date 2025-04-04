@@ -37,16 +37,16 @@ import java.util.function.Consumer
  * @see [TransEventPublisher]
  * @see [TransEventSubscription]
  */
-abstract class TransEventSubscriberBase<T : TransEntity, E : TransEvent>(protected val name: String) : TransEventSubscriber<T, E> {
+abstract class TransEventSubscriberBase<T : TransEntity, ET: EventType, E : TransEvent<ET>>(protected val name: String) : TransEventSubscriber<T, ET, E> {
 
     private val log = KotlinLogging.logger {}
 
-    private val onSubscribeEventActions: MutableList<Consumer<TransEventSubscription<T>>> = mutableListOf()
+    private val onSubscribeEventActions: MutableList<Consumer<TransEventSubscription<T, ET, E>>> = mutableListOf()
     private val onNextEventActions: MutableMap<EventType, MutableList<Consumer<E>>> = mutableMapOf()
     private val onErrorEventActions: MutableList<Consumer<Throwable>> = mutableListOf()
     private val onCompleteEventActions: MutableList<Runnable> = mutableListOf()
 
-    protected var subscription: TransEventSubscription<T>? = null
+    protected var subscription: TransEventSubscription<T, ET, E>? = null
 
     init {
         addOnSubscribeEventAction {
@@ -55,7 +55,7 @@ abstract class TransEventSubscriberBase<T : TransEntity, E : TransEvent>(protect
         }
     }
 
-    final override fun addOnSubscribeEventAction(action: Consumer<TransEventSubscription<T>>) {
+    final override fun addOnSubscribeEventAction(action: Consumer<TransEventSubscription<T, ET, E>>) {
         onSubscribeEventActions.add(action)
         log.trace { "onSubscribe event action added to $name" }
     }
@@ -91,10 +91,11 @@ abstract class TransEventSubscriberBase<T : TransEntity, E : TransEvent>(protect
 
     @Suppress("UNCHECKED_CAST")
     final override fun onSubscribe(subscription: Flow.Subscription) {
-        if (subscription is TransEventSubscription<*>) {
+        if (subscription is TransEventSubscription<*, *, *>) {
+            subscription as TransEventSubscription<T, ET, E>
             onSubscribeEventActions.forEach {
                 log.trace { "$name registered a subscription from ${subscription.source}" }
-                it.accept(subscription as TransEventSubscription<T>)
+                it.accept(subscription)
             }
             log.trace { "$this subscribed to changes from reactive entity ${subscription.source}" }
         }

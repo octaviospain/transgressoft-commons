@@ -34,14 +34,14 @@ import java.util.function.Consumer
  * @see [TransEventPublisher]
  * @see [TransEventSubscription]
  */
-interface TransEventSubscriber<T : TransEntity, E : TransEvent> : Flow.Subscriber<E> {
+interface TransEventSubscriber<T : TransEntity, ET: EventType, E : TransEvent<ET>> : Flow.Subscriber<E> {
 
     /**
      * Adds an action to be executed when [Flow.Subscriber.onSubscribe] is called.
      *
      * @param action The action to be executed, providing the [net.transgressoft.commons.TransEventSubscription] as parameter
      */
-    fun addOnSubscribeEventAction(action: Consumer<TransEventSubscription<T>>)
+    fun addOnSubscribeEventAction(action: Consumer<TransEventSubscription<T, ET, E>>)
 
     /**
      * Adds an action to be executed when [Flow.Subscriber.onNext] is called.

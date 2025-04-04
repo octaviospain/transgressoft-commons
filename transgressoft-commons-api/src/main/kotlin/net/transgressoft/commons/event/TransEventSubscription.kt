@@ -28,15 +28,17 @@ import java.util.concurrent.Flow
  * to the transgressoft-commons library, providing access to the source publisher of events.
  *
  * @param T The type of entities contained in the events this subscription handles
+ * @param ET The type of event type
+ * @param E The type of event this subscription handles
  *
  * @see [TransEventPublisher]
  * @see [TransEventSubscriber]
  */
-interface TransEventSubscription<T : TransEntity> : Flow.Subscription {
+interface TransEventSubscription<T : TransEntity, ET: EventType, E : TransEvent<ET>> : Flow.Subscription {
     /**
      * The publisher that is the source of events for this subscription.
      *
      * This reference allows subscribers to interact with or query the publisher if needed.
      */
-    val source: TransEventPublisher<out TransEvent>
+    val source: TransEventPublisher<ET, E>
 }

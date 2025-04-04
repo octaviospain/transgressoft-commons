@@ -31,6 +31,16 @@ import net.transgressoft.commons.entity.IdentifiableEntity
  * @param K the type of the [net.transgressoft.commons.entity.IdentifiableEntity] objects' id, which must be [Comparable]
  * @param T the type of the [net.transgressoft.commons.entity.IdentifiableEntity] objects
  */
-interface CrudEvent<K, T: IdentifiableEntity<K>>: TransEvent where K: Comparable<K> {
+interface CrudEvent<K, T: IdentifiableEntity<K>>: TransEvent<CrudEvent.Type> where K: Comparable<K> {
+
+    enum class Type(override val code: Int): EventType {
+        CREATE(100),
+        READ(200),
+        UPDATE(300),
+        DELETE(900);
+
+        override fun toString() = "StandardDataEvent($name, $code)"
+    }
+
     override val entities: Map<K, T>
 }

@@ -17,6 +17,7 @@
 
 package net.transgressoft.commons.entity
 
+import net.transgressoft.commons.event.CrudEvent
 import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.TransEventSubscription
 import java.time.LocalDateTime
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.SharedFlow
 interface ReactiveEntity<K, R : ReactiveEntity<K, R>> :
     IdentifiableEntity<K>,
     Flow.Publisher<EntityChangeEvent<K, R>> where K : Comparable<K> {
+
     val lastDateModified: LocalDateTime
 
     /**
@@ -46,7 +48,15 @@ interface ReactiveEntity<K, R : ReactiveEntity<K, R>> :
      */
     fun emitAsync(event: EntityChangeEvent<K, R>)
 
-    fun subscribe(action: suspend (EntityChangeEvent<K, R>) -> Unit): TransEventSubscription<in R>
+    /**
+     * Legacy compatibility method for Java-style Consumer subscriptions.
+     * Consider migrating to the Kotlin Flow-based subscription method instead.
+     */
+    fun subscribe(action: suspend (EntityChangeEvent<K, R>) -> Unit): TransEventSubscription<in R, CrudEvent.Type, EntityChangeEvent<K, R>>
 
-    fun subscribe(action: Consumer<in EntityChangeEvent<K, R>>): TransEventSubscription<in R>
+    fun subscribe(action: Consumer<in EntityChangeEvent<K, R>>): TransEventSubscription<in R, CrudEvent.Type, EntityChangeEvent<K, R>> =
+        subscribe(action::accept)
+
+    fun subscribe(vararg eventTypes: CrudEvent.Type, action: Consumer<in EntityChangeEvent<K, R>>):
+        TransEventSubscription<in R, CrudEvent.Type, EntityChangeEvent<K, R>>
 }

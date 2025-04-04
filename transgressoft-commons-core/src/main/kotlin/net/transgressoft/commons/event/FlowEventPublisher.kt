@@ -21,7 +21,6 @@ import net.transgressoft.commons.entity.TransEntity
 import mu.KotlinLogging
 import java.util.concurrent.ConcurrentSkipListSet
 import java.util.concurrent.Flow
-import java.util.function.Consumer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -53,7 +52,7 @@ import kotlinx.coroutines.launch
  * @see [TransEventPublisher]
  * @see [SharedFlow]
  */
-class FlowEventPublisher<E: TransEvent>(id: String): TransEventPublisher<E> {
+class FlowEventPublisher<ET : EventType, E: TransEvent<ET>>(id: String): TransEventPublisher<ET, E> {
 
     private val log = KotlinLogging.logger {}
 
@@ -86,7 +85,7 @@ class FlowEventPublisher<E: TransEvent>(id: String): TransEventPublisher<E> {
     /**
      * The coroutine scope used for emitting change events.
      */
-    private val flowScope = ReactiveScope.flowScope()
+    private val flowScope = ReactiveScope.flowScope
 
     private var activatedEventTypes: MutableSet<EventType> = ConcurrentSkipListSet()
 
@@ -139,8 +138,8 @@ class FlowEventPublisher<E: TransEvent>(id: String): TransEventPublisher<E> {
      * @param action The action to execute when the entity changes
      * @return A subscription that can be used to unsubscribe
      */
-    override fun subscribe(action: suspend (E) -> Unit): TransEventSubscription<in TransEntity> {
-        log.trace { "Anonymous subscription registered on $name" }
+    override fun subscribe(action: suspend (E) -> Unit): TransEventSubscription<in TransEntity, ET, E> {
+        log.trace { "Anonymous subscription registered to $name" }
 
         // Each subscription requires its own collection coroutine to handle events independently
         // This is a deliberate design pattern for reactive subscriptions
@@ -154,20 +153,31 @@ class FlowEventPublisher<E: TransEvent>(id: String): TransEventPublisher<E> {
         return ReactiveSubscription(this, job)
     }
 
-    /**
-     * Legacy compatibility method for Java-style Consumer subscriptions.
-     * Consider migrating to the Kotlin Flow-based subscription method instead.
-     */
-    override fun subscribe(action: Consumer<in E>): TransEventSubscription<in TransEntity> = subscribe { event -> action.accept(event) }
+    override fun subscribe(vararg eventTypes: ET, action: suspend (E) -> Unit): TransEventSubscription<in TransEntity, ET, E> {
+        log.trace { "Subscription registered to $name for event types: ${eventTypes.joinToString()}" }
 
-    override fun disableEvents(vararg types: EventType) {
+        // Each subscription requires its own collection coroutine to handle events independently
+        // This is a deliberate design pattern for reactive subscriptions
+        @Suppress("kotlin:S6311")
+        val job =
+            flowScope.launch {
+                changesFlow.collectLatest { event ->
+                    if (event.type in eventTypes) {
+                        action(event)
+                    }
+                }
+            }
+        return ReactiveSubscription(this, job)
+    }
+
+    override fun disableEvents(vararg types: ET) {
         types.toSet().let {
             activatedEventTypes.removeAll(it)
             log.trace { "Enabled event types from $name: $activatedEventTypes" }
         }
     }
 
-    override fun activateEvents(vararg types: EventType) {
+    override fun activateEvents(vararg types: ET) {
         types.toSet().let {
             activatedEventTypes.addAll(it)
             log.trace { "Enabled event types from $name: $activatedEventTypes" }
@@ -176,7 +186,7 @@ class FlowEventPublisher<E: TransEvent>(id: String): TransEventPublisher<E> {
 
     override fun toString() = "FlowEventPublisher(id=$name, activatedEventTypes=$activatedEventTypes)"
 
-    inner class ReactiveSubscription<T: TransEntity>(override val source: TransEventPublisher<E>, private val job: Job): TransEventSubscription<T> {
+    inner class ReactiveSubscription<T: TransEntity>(override val source: TransEventPublisher<ET, E>, private val job: Job): TransEventSubscription<T, ET, E> {
 
         override fun request(n: Long) {
             error("Events cannot be requested on demand")

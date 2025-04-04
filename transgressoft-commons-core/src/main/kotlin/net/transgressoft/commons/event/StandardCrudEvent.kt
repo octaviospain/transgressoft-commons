@@ -27,62 +27,52 @@ import net.transgressoft.commons.entity.IdentifiableEntity
  * and provides factory methods to create appropriately typed event instances.
  */
 sealed class StandardCrudEvent {
-    enum class Type(override val code: Int): EventType {
-        CREATE(100),
-        READ(200),
-        UPDATE(300),
-        DELETE(900);
-
-        override fun toString() = "StandardDataEvent($name, $code)"
-    }
 
     internal data class Create<K, T: IdentifiableEntity<K>>(override val entities: Map<K, T>): CrudEvent<K, T> where K: Comparable<K> {
-        override val type: EventType = Type.CREATE
+        override val type: CrudEvent.Type = CrudEvent.Type.CREATE
     }
 
     internal data class Read<K, T: IdentifiableEntity<K>>(override val entities: Map<K, T>): CrudEvent<K, T> where K: Comparable<K> {
-        override val type: EventType = Type.READ
+        override val type: CrudEvent.Type = CrudEvent.Type.READ
     }
 
     internal data class Update<K, T: IdentifiableEntity<K>>(override val entities: Map<K, T>, override val oldEntities: Map<K, T>):
         EntityChangeEvent<K, T> where K: Comparable<K> {
-        override val type: EventType = Type.UPDATE
+        override val type: CrudEvent.Type = CrudEvent.Type.UPDATE
     }
 
     internal data class Delete<K, T: IdentifiableEntity<K>>(override val entities: Map<K, T>): CrudEvent<K, T> where K: Comparable<K> {
-        override val type: EventType = Type.DELETE
+        override val type: CrudEvent.Type = CrudEvent.Type.DELETE
     }
 }
 
-fun CrudEvent<*, out IdentifiableEntity<*>>.isCreate(): Boolean = type == StandardCrudEvent.Type.CREATE
+fun CrudEvent<*, out IdentifiableEntity<*>>.isCreate(): Boolean = type == CrudEvent.Type.CREATE
 
-fun CrudEvent<*, out IdentifiableEntity<*>>.isRead(): Boolean = type == StandardCrudEvent.Type.READ
+fun CrudEvent<*, out IdentifiableEntity<*>>.isRead(): Boolean = type == CrudEvent.Type.READ
 
-fun CrudEvent<*, out IdentifiableEntity<*>>.isUpdate(): Boolean = type == StandardCrudEvent.Type.UPDATE
+fun CrudEvent<*, out IdentifiableEntity<*>>.isUpdate(): Boolean = type == CrudEvent.Type.UPDATE
 
-fun CrudEvent<*, out IdentifiableEntity<*>>.isDelete(): Boolean = type == StandardCrudEvent.Type.DELETE
+fun CrudEvent<*, out IdentifiableEntity<*>>.isDelete(): Boolean = type == CrudEvent.Type.DELETE
 
-fun <K : Comparable<K>, T: IdentifiableEntity<K>> StandardCrudEvent.Type.of(entity: T, oldEntity: T): CrudEvent<K, T> =
+fun <K : Comparable<K>, T: IdentifiableEntity<K>> CrudEvent.Type.of(entity: T, oldEntity: T): CrudEvent<K, T> =
     this.of(mapOf(entity.id to entity), mapOf(oldEntity.id to oldEntity))
 
-fun <K : Comparable<K>, T: IdentifiableEntity<K>> StandardCrudEvent.Type.of(entity: T): CrudEvent<K, T> =
+fun <K : Comparable<K>, T: IdentifiableEntity<K>> CrudEvent.Type.of(entity: T): CrudEvent<K, T> =
     this.of(mapOf(entity.id to entity))
 
-fun <K: Comparable<K>, T: IdentifiableEntity<K>> StandardCrudEvent.Type.of(entities: Map<K, T>, oldEntities: Map<K, T> = emptyMap()): CrudEvent<K, T> {
-    if (this == StandardCrudEvent.Type.UPDATE) {
+fun <K: Comparable<K>, T: IdentifiableEntity<K>> CrudEvent.Type.of(entities: Map<K, T>, oldEntities: Map<K, T> = emptyMap()): CrudEvent<K, T> {
+    if (this == CrudEvent.Type.UPDATE) {
         require(eventCollectionsAreConsistent(entities, oldEntities)) {
-            """
-            The collections of entities and old entities must be consistent for an UPDATE event.
-            They don't have the same size or they don't have the same keys.
-            """
+            "The collections of entities and old entities must be consistent for an UPDATE event. " +
+                "They don't have the same size or they don't have the same keys."
         }
     }
 
     return when (this) {
-        StandardCrudEvent.Type.CREATE -> StandardCrudEvent.Create(entities)
-        StandardCrudEvent.Type.READ -> StandardCrudEvent.Read(entities)
-        StandardCrudEvent.Type.UPDATE -> StandardCrudEvent.Update(entities, oldEntities)
-        StandardCrudEvent.Type.DELETE -> StandardCrudEvent.Delete(entities)
+        CrudEvent.Type.CREATE -> StandardCrudEvent.Create(entities)
+        CrudEvent.Type.READ -> StandardCrudEvent.Read(entities)
+        CrudEvent.Type.UPDATE -> StandardCrudEvent.Update(entities, oldEntities)
+        CrudEvent.Type.DELETE -> StandardCrudEvent.Delete(entities)
     }
 }
 

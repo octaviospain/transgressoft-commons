@@ -1,10 +1,12 @@
 package net.transgressoft.commons.entity
 
 import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.CrudEvent.Type.CREATE
+import net.transgressoft.commons.event.CrudEvent.Type.DELETE
+import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.FlowEventPublisher
 import net.transgressoft.commons.event.ReactiveScope
-import net.transgressoft.commons.event.StandardCrudEvent
 import net.transgressoft.commons.event.isCreate
 import net.transgressoft.commons.event.isDelete
 import net.transgressoft.commons.event.isUpdate
@@ -18,9 +20,7 @@ import java.util.concurrent.Flow
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Consumer
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -31,13 +31,13 @@ class ReactiveEntityTest : StringSpec({
     val testScope = CoroutineScope(testDispatcher)
 
     beforeSpec {
-        ReactiveScope.setDefaultFlowScope(testScope)
-        ReactiveScope.setDefaultIoScope(testScope)
+        ReactiveScope.flowScope = testScope
+        ReactiveScope.ioScope = testScope
     }
 
     afterSpec {
-        ReactiveScope.setDefaultFlowScope(CoroutineScope(Dispatchers.Default.limitedParallelism(4) + SupervisorJob()))
-        ReactiveScope.setDefaultIoScope(CoroutineScope(Dispatchers.IO.limitedParallelism(1) + SupervisorJob()))
+        ReactiveScope.resetDefaultIoScope()
+        ReactiveScope.resetDefaultFlowScope()
     }
 
     "ReactiveEntityBase should notify subscribers when a property changes" {
@@ -244,9 +244,9 @@ class ReactiveEntityTest : StringSpec({
         val updateCounter = AtomicInteger(0)
         val deleteCounter = AtomicInteger(0)
 
-        val createSubscription = publisher.subscribe(StandardCrudEvent.Type.CREATE, Consumer { createCounter.incrementAndGet() })
-        val updateSubscription = publisher.subscribe(StandardCrudEvent.Type.UPDATE, Consumer { updateCounter.incrementAndGet() })
-        val deleteSubscription = publisher.subscribe(StandardCrudEvent.Type.DELETE, Consumer { deleteCounter.incrementAndGet() })
+        val createSubscription = publisher.subscribe(CREATE) { createCounter.incrementAndGet() }
+        val updateSubscription = publisher.subscribe(UPDATE) { updateCounter.incrementAndGet() }
+        val deleteSubscription = publisher.subscribe(DELETE) { deleteCounter.incrementAndGet() }
 
         val entity = TestEntity(UUID.randomUUID().toString())
         publisher.create(entity)

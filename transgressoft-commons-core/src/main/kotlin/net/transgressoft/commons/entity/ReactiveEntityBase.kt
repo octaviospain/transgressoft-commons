@@ -17,9 +17,10 @@
 
 package net.transgressoft.commons.entity
 
+import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.FlowEventPublisher
-import net.transgressoft.commons.event.StandardCrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.TransEventPublisher
 import net.transgressoft.commons.event.TransEventSubscription
 import net.transgressoft.commons.event.of
@@ -44,7 +45,7 @@ import kotlinx.coroutines.flow.SharedFlow
  * @see EntityChangeEvent
  */
 abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
-    private val publisher: TransEventPublisher<EntityChangeEvent<K, R>>
+    private val publisher: TransEventPublisher<CrudEvent.Type, EntityChangeEvent<K, R>>
 ) : ReactiveEntity<K, R> where K : Comparable<K> {
     private val log = KotlinLogging.logger {}
 
@@ -65,11 +66,18 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
 
     override fun emitAsync(event: EntityChangeEvent<K, R>) = publisher.emitAsync(event)
 
-    override fun subscribe(action: suspend (EntityChangeEvent<K, R>) -> Unit): TransEventSubscription<in TransEntity> = publisher.subscribe(action)
-
-    override fun subscribe(action: Consumer<in EntityChangeEvent<K, R>>): TransEventSubscription<in TransEntity> = publisher.subscribe(action)
+    override fun subscribe(action: suspend (EntityChangeEvent<K, R>) -> Unit):
+        TransEventSubscription<in TransEntity, CrudEvent.Type, EntityChangeEvent<K, R>> = publisher.subscribe(action)
 
     override fun subscribe(subscriber: Flow.Subscriber<in EntityChangeEvent<K, R>>?) = publisher.subscribe(subscriber)
+
+    override fun subscribe(vararg eventTypes: CrudEvent.Type, action: Consumer<in EntityChangeEvent<K, R>>):
+        TransEventSubscription<in R, CrudEvent.Type, EntityChangeEvent<K, R>> {
+        require(UPDATE in eventTypes) {
+            throw IllegalArgumentException("Only UPDATE event is supported for reactive entities")
+        }
+        return subscribe(action::accept)
+    }
 
     /**
      * Sets a property value and notifies all subscribers if the value has changed.

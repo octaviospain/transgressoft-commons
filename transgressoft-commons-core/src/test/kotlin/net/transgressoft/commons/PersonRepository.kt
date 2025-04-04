@@ -2,8 +2,8 @@ package net.transgressoft.commons
 
 import net.transgressoft.commons.entity.ReactiveEntity
 import net.transgressoft.commons.entity.ReactiveEntityBase
-import net.transgressoft.commons.event.CrudEvent
 import net.transgressoft.commons.event.EventType
+import net.transgressoft.commons.event.TransEvent
 import net.transgressoft.commons.persistence.json.JsonFileRepositoryBase
 import net.transgressoft.commons.persistence.json.TransEntityPolymorphicSerializer
 import io.kotest.property.Arb
@@ -70,8 +70,8 @@ sealed class PersonEventType {
         BORN(201)
     }
 
-    private data class Born<T : Personly>(val genre: Boolean, override val entities: Map<Int, Personly>) : CrudEvent<Int, Personly> {
-        override val type: EventType = Type.BORN
+    private data class Born<T : Personly>(val genre: Boolean, override val entities: Map<Int, Personly>) : TransEvent<Type> {
+        override val type: PersonEventType.Type = Type.BORN
     }
 }
 

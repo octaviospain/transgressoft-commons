@@ -4,9 +4,12 @@ import net.transgressoft.commons.Person
 import net.transgressoft.commons.arbitraryPerson
 import net.transgressoft.commons.entity.toIds
 import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.CrudEvent.Type.CREATE
+import net.transgressoft.commons.event.CrudEvent.Type.DELETE
+import net.transgressoft.commons.event.CrudEvent.Type.READ
+import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.EventType
-import net.transgressoft.commons.event.StandardCrudEvent
 import net.transgressoft.commons.event.TransEventSubscriberBase
 import net.transgressoft.commons.event.isCreate
 import net.transgressoft.commons.event.isDelete
@@ -31,27 +34,27 @@ import kotlin.time.Duration.Companion.milliseconds
 
 internal class VolatileRepositoryTest : StringSpec({
 
-    class SomeClassSubscribedToEvents() : TransEventSubscriberBase<Person, CrudEvent<Int, Person>>("Some class") {
+    class SomeClassSubscribedToEvents() : TransEventSubscriberBase<Person, CrudEvent.Type, CrudEvent<Int, Person>>("Some class") {
         val createEventEntities = AtomicInteger(0)
         val deletedEventEntities = AtomicInteger(0)
         val receivedEvents = mutableMapOf<EventType, CrudEvent<Int, Person>>()
 
         init {
-            addOnNextEventAction(StandardCrudEvent.Type.CREATE, StandardCrudEvent.Type.UPDATE) { event ->
+            addOnNextEventAction(CREATE, UPDATE) { event ->
                 receivedEvents[event.type] = event
                 createEventEntities.getAndUpdate { it + event.entities.size }
             }
-            addOnNextEventAction(StandardCrudEvent.Type.DELETE) { event ->
+            addOnNextEventAction(DELETE) { event ->
                 receivedEvents[event.type] = event
                 deletedEventEntities.getAndUpdate { it + event.entities.size }
             }
-            addOnNextEventAction(StandardCrudEvent.Type.READ) { receivedEvents[it.type] = it }
+            addOnNextEventAction(READ) { receivedEvents[it.type] = it }
         }
     }
 
     class VolatilePersonRepository : VolatileRepository<Int, Person>("VolatilePersonRepository") {
         init {
-            activateEvents(StandardCrudEvent.Type.CREATE, StandardCrudEvent.Type.READ, StandardCrudEvent.Type.UPDATE, StandardCrudEvent.Type.DELETE)
+            activateEvents(CREATE, READ, UPDATE, DELETE)
         }
     }
 
@@ -101,7 +104,7 @@ internal class VolatileRepositoryTest : StringSpec({
         repository.findById(person.id).get().money shouldBe previousMoney + 1
 
         eventually(100.milliseconds) {
-            assertSoftly(subscriber.receivedEvents[StandardCrudEvent.Type.UPDATE]) {
+            assertSoftly(subscriber.receivedEvents[UPDATE]) {
                 it?.let {
                     this as EntityChangeEvent<Int, Person>
                     this.entities.values.shouldContainOnly(person)
@@ -117,7 +120,7 @@ internal class VolatileRepositoryTest : StringSpec({
         repository.runForMany(set.toIds()) { it.money = it.money?.plus(1) } shouldBe true
 
         eventually(100.milliseconds) {
-            assertSoftly(subscriber.receivedEvents[StandardCrudEvent.Type.UPDATE]) {
+            assertSoftly(subscriber.receivedEvents[UPDATE]) {
                 it?.let {
                     this as EntityChangeEvent<Int, Person>
                     this.entities.values shouldContainAll set
@@ -137,7 +140,7 @@ internal class VolatileRepositoryTest : StringSpec({
         repository.runMatching({ it.money!! < 100 }) { it.money = it.money?.plus(1) } shouldBe true
 
         eventually(100.milliseconds) {
-            assertSoftly(subscriber.receivedEvents[StandardCrudEvent.Type.UPDATE]) {
+            assertSoftly(subscriber.receivedEvents[UPDATE]) {
                 it?.let {
                     this as EntityChangeEvent<Int, Person>
                     this.entities.values.shouldContainOnly(poorPerson)
@@ -152,7 +155,7 @@ internal class VolatileRepositoryTest : StringSpec({
         val person2 = arbitraryPerson().next()
         repository.addOrReplaceAll(setOf(person, person2)) shouldBe true
         eventually(100.milliseconds) {
-            assertSoftly(subscriber.receivedEvents[StandardCrudEvent.Type.CREATE]) {
+            assertSoftly(subscriber.receivedEvents[CREATE]) {
                 this?.isCreate() shouldBe true
                 this?.entities?.values shouldContainOnly setOf(person, person2)
             }
@@ -162,7 +165,7 @@ internal class VolatileRepositoryTest : StringSpec({
 
         repository - setOf(person, person2) shouldBe true
         eventually(100.milliseconds) {
-            assertSoftly(subscriber.receivedEvents[StandardCrudEvent.Type.DELETE]) {
+            assertSoftly(subscriber.receivedEvents[DELETE]) {
                 this?.isDelete() shouldBe true
                 this?.entities?.values shouldContainOnly setOf(person, person2)
             }
@@ -173,7 +176,7 @@ internal class VolatileRepositoryTest : StringSpec({
         repository.add(person) shouldBe true
         repository.findById(person.id) shouldBePresent { it shouldBe person }
         eventually(100.milliseconds) {
-            assertSoftly(subscriber.receivedEvents[StandardCrudEvent.Type.READ]) {
+            assertSoftly(subscriber.receivedEvents[READ]) {
                 this?.isRead() shouldBe true
                 this?.entities?.values shouldContainOnly setOf(person)
             }
@@ -184,7 +187,7 @@ internal class VolatileRepositoryTest : StringSpec({
         val entityModified = person.copy(initialName = "Octavio")
         repository.addOrReplace(entityModified) shouldBe true
         eventually(100.milliseconds) {
-            assertSoftly(subscriber.receivedEvents[StandardCrudEvent.Type.UPDATE]) {
+            assertSoftly(subscriber.receivedEvents[UPDATE]) {
                 this?.isUpdate() shouldBe true
                 this as EntityChangeEvent<Int, Person>
                 this.entities.values.shouldContainOnly(entityModified)
@@ -197,7 +200,7 @@ internal class VolatileRepositoryTest : StringSpec({
 
         repository.clear()
         eventually(100.milliseconds) {
-            assertSoftly(subscriber.receivedEvents[StandardCrudEvent.Type.DELETE]) {
+            assertSoftly(subscriber.receivedEvents[DELETE]) {
                 this?.isDelete() shouldBe true
                 this?.entities?.values.shouldContainOnly(entityModified)
             }
@@ -213,7 +216,7 @@ internal class VolatileRepositoryTest : StringSpec({
         repository.add(person) shouldBe true
 
         eventually(100.milliseconds) {
-            subscriber.receivedEvents[StandardCrudEvent.Type.CREATE] shouldNotBe null
+            subscriber.receivedEvents[CREATE] shouldNotBe null
             subscriber.createEventEntities.get() shouldBe 1
         }
 
@@ -222,7 +225,7 @@ internal class VolatileRepositoryTest : StringSpec({
         subscriber.createEventEntities.set(0)
 
         // Disable CREATE events
-        repository.disableEvents(StandardCrudEvent.Type.CREATE)
+        repository.disableEvents(CREATE)
 
         // Add another person, but event should not be received
         val person2 = arbitraryPerson().next()
@@ -230,16 +233,16 @@ internal class VolatileRepositoryTest : StringSpec({
 
         Thread.sleep(100) // Wait a bit to ensure no events would be processed
 
-        subscriber.receivedEvents[StandardCrudEvent.Type.CREATE] shouldBe null
+        subscriber.receivedEvents[CREATE] shouldBe null
         subscriber.createEventEntities.get() shouldBe 0
 
         // Re-enable events and verify they work again
-        repository.activateEvents(StandardCrudEvent.Type.CREATE)
+        repository.activateEvents(CREATE)
         val person3 = arbitraryPerson().next()
         repository.add(person3) shouldBe true
 
         eventually(100.milliseconds) {
-            subscriber.receivedEvents[StandardCrudEvent.Type.CREATE] shouldNotBe null
+            subscriber.receivedEvents[CREATE] shouldNotBe null
             subscriber.createEventEntities.get() shouldBe 1
         }
     }
@@ -251,9 +254,9 @@ internal class VolatileRepositoryTest : StringSpec({
         val errorMsg = mutableListOf<String>()
 
         val testSubscriber =
-            object : TransEventSubscriberBase<Person, CrudEvent<Int, Person>>("ErrorCompleteSubscriber") {
+            object : TransEventSubscriberBase<Person, CrudEvent.Type, CrudEvent<Int, Person>>("ErrorCompleteSubscriber") {
                 init {
-                    addOnNextEventAction(StandardCrudEvent.Type.CREATE) { /* Just observe */ }
+                    addOnNextEventAction(CREATE) { /* Just observe */ }
 
                     addOnErrorEventAction { error ->
                         errorFired.incrementAndGet()

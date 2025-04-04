@@ -51,24 +51,21 @@ object ReactiveScope {
 
     /**
      * Sets the default scope for all reactive entities that don't specify their own.
-     * Primarily used for testing to inject test dispatchers.
-     *
-     * @param scope The coroutine scope to use as default
+     * Primarily used for testing to inject test dispatchers but can be used to customize
+     * the default scope for all reactive entities.
      */
-    fun setDefaultFlowScope(scope: CoroutineScope) {
-        defaultFlowScope = scope
-    }
-
-    fun setDefaultIoScope(scope: CoroutineScope) {
-        defaultIoScope = scope
-    }
+    var flowScope: CoroutineScope = defaultFlowScope
 
     /**
-     * Gets the current default scope for reactive entities.
-     *
-     * @return The current default CoroutineScope
+     * Sets the default scope for I/O operations.
      */
-    internal fun flowScope(): CoroutineScope = defaultFlowScope
+    var ioScope: CoroutineScope = defaultIoScope
 
-    internal fun ioScope(): CoroutineScope = defaultIoScope
+    fun resetDefaultFlowScope() {
+        flowScope = defaultFlowScope
+    }
+
+    fun resetDefaultIoScope() {
+        ioScope = defaultIoScope
+    }
 }

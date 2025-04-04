@@ -26,7 +26,7 @@ import net.transgressoft.commons.entity.TransEntity
  * a common interface that all specific event types must implement. This facilitates
  * a consistent approach to event handling, publishing, and subscription.
  */
-interface TransEvent {
+interface TransEvent<T : EventType> {
 
     /**
      * The type of this event, used to categorize and filter events.
@@ -34,7 +34,7 @@ interface TransEvent {
      * Event types allow subscribers to selectively process only events they're
      * interested in, based on the event's category.
      */
-    val type: EventType
+    val type: T
 
     /**
      * A map of entities associated with this event, keyed by their identifiers.

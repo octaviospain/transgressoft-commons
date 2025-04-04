@@ -7,8 +7,8 @@ import net.transgressoft.commons.PersonJsonFileRepository
 import net.transgressoft.commons.Personly
 import net.transgressoft.commons.arbitraryPerson
 import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.CrudEvent.Type.CREATE
 import net.transgressoft.commons.event.ReactiveScope
-import net.transgressoft.commons.event.StandardCrudEvent.Type.CREATE
 import net.transgressoft.commons.event.TransEventSubscription
 import io.kotest.assertions.json.shouldEqualJson
 import io.kotest.assertions.json.shouldNotEqualJson
@@ -33,9 +33,7 @@ import kotlin.collections.forEach
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 
@@ -48,8 +46,8 @@ class JsonFileRepositoryTest: StringSpec({
     lateinit var repository: PersonJsonFileRepository
 
     beforeSpec {
-        ReactiveScope.setDefaultFlowScope(testScope)
-        ReactiveScope.setDefaultIoScope(testScope)
+        ReactiveScope.flowScope = testScope
+        ReactiveScope.ioScope = testScope
     }
 
     beforeEach {
@@ -62,8 +60,8 @@ class JsonFileRepositoryTest: StringSpec({
     }
 
     afterSpec {
-        ReactiveScope.setDefaultFlowScope(CoroutineScope(Dispatchers.Default.limitedParallelism(4) + SupervisorJob()))
-        ReactiveScope.setDefaultIoScope(CoroutineScope(Dispatchers.IO.limitedParallelism(1) + SupervisorJob()))
+        ReactiveScope.resetDefaultIoScope()
+        ReactiveScope.resetDefaultFlowScope()
     }
 
     "Repository serializes itself to file when element is added" {
@@ -375,7 +373,8 @@ class JsonFileRepositoryTest: StringSpec({
 
     "Events should be published correctly during concurrent operations" {
         val events = Collections.synchronizedList(mutableListOf<CrudEvent<Int, Personly>>())
-        val subscription: TransEventSubscription<in Personly> = repository.subscribe(CREATE) { events.add(it) }
+        val subscription: TransEventSubscription<in Personly, CrudEvent.Type, CrudEvent<Int, Personly>> =
+            repository.subscribe(CREATE) { events.add(it) }
 
         val testPeople = (1..5_000).map { arbitraryPerson(it).next() }.distinct()
 

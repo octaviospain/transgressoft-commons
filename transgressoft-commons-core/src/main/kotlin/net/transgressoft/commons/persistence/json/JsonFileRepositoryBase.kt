@@ -18,6 +18,8 @@
 package net.transgressoft.commons.persistence.json
 
 import net.transgressoft.commons.entity.ReactiveEntity
+import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.ReactiveScope
 import net.transgressoft.commons.event.TransEventSubscription
 import net.transgressoft.commons.persistence.RepositoryBase
@@ -91,13 +93,13 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
      * For testing, provide a scope with a test dispatcher.
      * @see [ReactiveScope]
      */
-    private val ioScope: CoroutineScope = ReactiveScope.ioScope()
+    private val ioScope: CoroutineScope = ReactiveScope.ioScope
 
     /**
      * This coroutine scope is used to handle all emissions to the
      * json serialization job for a fire and forget approach
      */
-    private val flowScope: CoroutineScope = ReactiveScope.flowScope()
+    private val flowScope: CoroutineScope = ReactiveScope.flowScope
 
     private val serializationEventChannel = Channel<Unit>(Channel.CONFLATED)
 
@@ -105,7 +107,7 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
      * Subscriptions map for each entity in the repository is needed in order to unsubscribe
      * from their changes once they are removed.
      */
-    private val subscriptionsMap: MutableMap<K, TransEventSubscription<in R>> = ConcurrentHashMap()
+    private val subscriptionsMap: MutableMap<K, TransEventSubscription<in R, CrudEvent.Type, EntityChangeEvent<K, R>>> = ConcurrentHashMap()
 
     init {
         require(jsonFile.exists().and(jsonFile.canWrite()).and(jsonFile.extension == "json")) {
@@ -217,6 +219,7 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
             if (removed) {
                 serializationEventChannel.trySend(Unit)
                 subscriptionsMap[entity.id]?.cancel() ?: error("Repository should contain a subscription for $entity")
+                subscriptionsMap.remove(entity.id)
             }
         }
 
@@ -224,12 +227,19 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
         super.removeAll(entities).also { removed ->
             if (removed) {
                 serializationEventChannel.trySend(Unit)
-                entities.forEach { subscriptionsMap[it.id]?.cancel() ?: error("Repository should contain a subscription for $it") }
+                entities.forEach {
+                    subscriptionsMap[it.id]?.cancel() ?: error("Repository should contain a subscription for $it")
+                    subscriptionsMap.remove(it.id)
+                }
             }
         }
 
     override fun clear() {
         super.clear()
         serializationEventChannel.trySend(Unit)
+        subscriptionsMap.forEach { (_, subscription) ->
+            subscription.cancel()
+        }
+        subscriptionsMap.clear()
     }
 }

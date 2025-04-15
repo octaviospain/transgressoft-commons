@@ -1,4 +1,9 @@
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/octaviospain/transgressoft-commons/.github%2Fworkflows%2Fbuild.yml?logo=github)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=net.transgressoft%3Atransgressoft-commons&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=net.transgressoft%3Atransgressoft-commons)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=net.transgressoft%3Atransgressoft-commons&metric=bugs)](https://sonarcloud.io/summary/new_code?id=net.transgressoft%3Atransgressoft-commons)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=net.transgressoft%3Atransgressoft-commons&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=net.transgressoft%3Atransgressoft-commons)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=net.transgressoft%3Atransgressoft-commons&metric=coverage)](https://sonarcloud.io/summary/new_code?id=net.transgressoft%3Atransgressoft-commons)
+[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=net.transgressoft%3Atransgressoft-commons&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=net.transgressoft%3Atransgressoft-commons)
 # Transgressoft Commons
 
 A reactive library for Kotlin & Java projects that implements the Publisher-Subscriber pattern, enabling more maintainable and decoupled systems through reactive programming principles.
@@ -8,6 +13,10 @@ A reactive library for Kotlin & Java projects that implements the Publisher-Subs
 Transgressoft Commons provides a framework for entities that follow a 'reactive' approach based on the Publisher-Subscriber pattern. This allows objects to subscribe to changes in others while maintaining clean boundaries and separation of concerns.
 
 The approach is inspired by object-oriented design principles where entities aren't merely passive data structures, but active objects with their own behaviors and responsibilities. Instead of other objects directly manipulating an entity's state, they subscribe to its changes, creating a more decoupled and maintainable system.
+
+**Requirements:**
+* Java 17+
+* Kotlin 2.1.10+
 
 **Key Features:**
 
@@ -24,6 +33,7 @@ The approach is inspired by object-oriented design principles where entities are
 
 - [Core Concepts: Reactive Event System](#-core-concepts-reactive-event-system)
 - [Core Concepts: JSON Serialization](#-core-concepts-json-serialization)
+- [Java Interoperability](#java-interoperability)
 - [Contributing](#-contributing)
 - [License and Attributions](#-license-and-attributions)
 
@@ -232,7 +242,100 @@ debugMode.value = true
 3. **Thread Safety** - Concurrent operations are handled safely
 4. **Consistency** - Repository and file are always in sync
 
-*Note: While the examples in this README are in Kotlin, the library is designed with Java compatibility in mind. Java usage examples will be provided in future documentation.*
+### Java Interoperability
+
+Transgressoft Commons is designed to work seamlessly from both Kotlin and Java code. Below are examples demonstrating how to use the library from Java:
+
+#### 1. Working with Reactive Primitives in Java
+
+```java
+// Create a reactive primitive with an ID and initial value
+var appName = new ReactiveString("app.name", "MyApp");
+
+// Subscribe to changes
+var subscription = appName.subscribe(event -> {
+    var oldValue = event.getOldEntities().values().iterator().next().getValue();
+    var newValue = event.getEntities().values().iterator().next().getValue();
+    System.out.println("Config changed: " + oldValue + " -> " + newValue);
+});
+
+// When value changes, subscribers are automatically notified
+appName.setValue("NewAppName");
+// Output: Config changed: MyApp -> NewAppName
+
+// Later, if needed, you can cancel the subscription
+subscription.cancel();
+```
+
+#### 2. Working with Reactive Entities in Java
+
+```java
+// Use an existing Kotlin-defined reactive entity class
+// This example uses the Person class which implements ReactiveEntityBase
+var person = new Person(1, "Alice", 0L, true);
+
+// Subscribe to changes
+var subscription = person.subscribe(event -> {
+    var newPerson = event.getEntities().values().iterator().next();
+    var oldPerson = event.getOldEntities().values().iterator().next();
+    System.out.println("Name changed from " + oldPerson.getName() + " to " + newPerson.getName());
+});
+
+// Changes trigger notifications
+person.setName("John");
+// Output: Name changed from Alice to John
+
+subscription.cancel();
+```
+
+#### 3. Using Repository Subscriptions in Java
+
+```java
+// Create a repository for Person entities
+var repository = new VolatilePersonRepository();
+
+// Subscribe to all events from the repository
+var subscription = repository.subscribe(event -> {
+    System.out.println("Entities affected: " + event.getEntities().values());
+});
+
+// Repository operations trigger events
+repository.add(new Person(1, "Alice", 0L, true));
+// Output: Entities affected: [Person(id=1, name=Alice, money=0, morals=true)]
+
+// Entity changes are propagated through the repository
+repository.runForSingle(1, person -> person.setName("John"));
+// Output: Entities affected: [Person(id=1, name=John, money=0, morals=true)]
+
+subscription.cancel();
+```
+
+#### 4. Working with Flexible JSON Repository in Java
+
+```java
+// Create a JSON file repository
+var configFile = new File("config.json");
+var configRepository = new FlexibleJsonFileRepository(configFile);
+
+// Create reactive primitives in the repository
+var serverName = configRepository.createReactiveString("server.name", "MainServer");
+var maxConnections = configRepository.createReactiveInt("max.connections", 100);
+var debugMode = configRepository.createReactiveBoolean("debug.mode", false);
+
+// When values change, they are automatically persisted
+maxConnections.setValue(150);
+debugMode.setValue(true);
+serverName.setValue("BackupServer");
+
+// Close to ensure all changes are written
+configRepository.close();
+
+// Changes persist across repository instances
+var reloadedRepo = new FlexibleJsonFileRepository(configFile);
+// Values remain: serverName="BackupServer", maxConnections=150, debugMode=true
+```
+
+For complete working examples, see [JavaInteroperabilityTest.java](https://github.com/octaviospain/transgressoft-commons/blob/master/transgressoft-commons-core/src/test/java/net/transgressoft/commons/JavaInteroperabilityTest.java) in the repository.
 
 ## 🤝 Contributing
 

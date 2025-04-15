@@ -112,7 +112,7 @@ abstract class RepositoryBase<K : Comparable<K>, T : IdentifiableEntity<K>>(
         return removed
     }
 
-    override fun removeAll(entities: Set<T>): Boolean {
+    override fun removeAll(entities: Collection<T>): Boolean {
         val removed = mutableListOf<T>()
 
         entities.forEach { entity ->

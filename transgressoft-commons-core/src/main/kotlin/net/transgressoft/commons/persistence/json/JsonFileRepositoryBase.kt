@@ -223,7 +223,7 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
             }
         }
 
-    override fun removeAll(entities: Set<R>) =
+    override fun removeAll(entities: Collection<R>) =
         super.removeAll(entities).also { removed ->
             if (removed) {
                 serializationEventChannel.trySend(Unit)

@@ -90,18 +90,18 @@ interface Repository<K, in T: IdentifiableEntity<K>> : Registry<K, T> where K : 
     /**
      * Removes all given entities from the repository.
      *
-     * @param entities The set of entities to remove
+     * @param entities The collection of entities to remove
      * @return True if any entity was removed, false otherwise
      */
-    fun removeAll(entities: Set<T>): Boolean
+    fun removeAll(entities: Collection<T>): Boolean
 
     /**
      * Operator overload for removing a set of entities using the minus operator.
      *
-     * @param entities The set of entities to remove
+     * @param entities The collection of entities to remove
      * @return True if any entity was removed, false otherwise
      */
-    operator fun minus(entities: Set<T>): Boolean = removeAll(entities)
+    operator fun minus(entities: Collection<T>): Boolean = removeAll(entities)
 
     /**
      * Removes all entities from the repository, leaving it empty.

@@ -5,3 +5,5 @@
 out/
 build/
 .kotlin
+CLAUDE.md
+.mcp.json

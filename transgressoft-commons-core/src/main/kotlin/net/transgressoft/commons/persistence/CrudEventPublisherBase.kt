@@ -29,6 +29,7 @@ import net.transgressoft.commons.event.TransEventPublisher
 import net.transgressoft.commons.event.TransEventSubscription
 import net.transgressoft.commons.event.of
 import java.util.concurrent.Flow
+import kotlinx.coroutines.flow.SharedFlow
 
 /**
  * Base publisher implementation specialized for CRUD events related to identifiable entities.
@@ -53,6 +54,8 @@ abstract class CrudEventPublisherBase<K : Comparable<K>, T : IdentifiableEntity<
     init {
         activateEvents(CREATE, UPDATE, DELETE)
     }
+
+    override val changes: SharedFlow<CrudEvent<K, T>> = publisher.changes
 
     final override fun subscribe(subscriber: Flow.Subscriber<in CrudEvent<K, T>>) {
         publisher.subscribe(subscriber)

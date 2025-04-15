@@ -2,8 +2,13 @@ package net.transgressoft.commons
 
 import net.transgressoft.commons.entity.ReactiveEntity
 import net.transgressoft.commons.entity.ReactiveEntityBase
+import net.transgressoft.commons.event.CrudEvent.Type.CREATE
+import net.transgressoft.commons.event.CrudEvent.Type.DELETE
+import net.transgressoft.commons.event.CrudEvent.Type.READ
+import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.EventType
 import net.transgressoft.commons.event.TransEvent
+import net.transgressoft.commons.persistence.VolatileRepository
 import net.transgressoft.commons.persistence.json.JsonFileRepositoryBase
 import net.transgressoft.commons.persistence.json.TransEntityPolymorphicSerializer
 import io.kotest.property.Arb
@@ -80,10 +85,18 @@ private val defaultId = -1
 fun arbitraryPerson(id: Int = defaultId) =
     arbitrary {
         Person(
-            id = if (id == defaultId) Arb.Companion.positiveInt(500_000).bind() else id, initialName = Arb.Companion.stringPattern("[a-z]{5} [a-z]{5}").bind(),
-            money = Arb.Companion.long(0, Long.MAX_VALUE - 1).bind(), morals = Arb.Companion.boolean().bind()
+            id = if (id == defaultId) Arb.Companion.positiveInt(500_000).bind() else id,
+            initialName = Arb.Companion.stringPattern("[a-z]{5} [a-z]{5}").bind(),
+            money = Arb.Companion.long(0, Long.MAX_VALUE - 1).bind(),
+            morals = Arb.Companion.boolean().bind()
         )
     }
+
+class VolatilePersonRepository : VolatileRepository<Int, Person>("VolatilePersonRepository") {
+    init {
+        activateEvents(CREATE, READ, UPDATE, DELETE)
+    }
+}
 
 abstract class HumanGenericJsonFileRepositoryBase<H : Human<H>>(
     name: String,

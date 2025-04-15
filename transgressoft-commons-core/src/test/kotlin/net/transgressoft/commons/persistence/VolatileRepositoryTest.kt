@@ -1,6 +1,7 @@
 package net.transgressoft.commons.persistence
 
 import net.transgressoft.commons.Person
+import net.transgressoft.commons.VolatilePersonRepository
 import net.transgressoft.commons.arbitraryPerson
 import net.transgressoft.commons.entity.toIds
 import net.transgressoft.commons.event.CrudEvent
@@ -49,12 +50,6 @@ internal class VolatileRepositoryTest : StringSpec({
                 deletedEventEntities.getAndUpdate { it + event.entities.size }
             }
             addOnNextEventAction(READ) { receivedEvents[it.type] = it }
-        }
-    }
-
-    class VolatilePersonRepository : VolatileRepository<Int, Person>("VolatilePersonRepository") {
-        init {
-            activateEvents(CREATE, READ, UPDATE, DELETE)
         }
     }
 
@@ -293,5 +288,66 @@ internal class VolatileRepositoryTest : StringSpec({
 
         errorFired.get() shouldBe 1 // Still 1, not 2
         completeFired.get() shouldBe 1 // Still 1, not 2
+    }
+
+    "Anonymous subscription test" {
+        // Create counters to track events
+        val createEventsReceived = AtomicInteger(0)
+        val updateEventsReceived = AtomicInteger(0)
+        val receivedPersonIds = mutableSetOf<Int>()
+
+        // Create an anonymous subscription for CREATE events
+        val createSubscription =
+            repository.subscribe(CREATE) { event ->
+                createEventsReceived.incrementAndGet()
+                event.entities.keys.forEach { receivedPersonIds.add(it) }
+            }
+
+        // Create another anonymous subscription for UPDATE events
+        val updateSubscription =
+            repository.subscribe(UPDATE) { event ->
+                updateEventsReceived.incrementAndGet()
+            }
+
+        // Add a person to trigger CREATE event
+        val person = arbitraryPerson().next()
+        repository.add(person) shouldBe true
+
+        eventually(100.milliseconds) {
+            createEventsReceived.get() shouldBe 1
+            receivedPersonIds shouldContainOnly setOf(person.id)
+            updateEventsReceived.get() shouldBe 0
+        }
+
+        // Update the person to trigger UPDATE event
+        repository.runForSingle(person.id) { it.money = it.money?.plus(100) } shouldBe true
+
+        eventually(100.milliseconds) {
+            createEventsReceived.get() shouldBe 1
+            updateEventsReceived.get() shouldBe 1
+        }
+
+        // Cancel the CREATE subscription
+        createSubscription.cancel()
+
+        // Add another person - should not trigger the canceled subscription
+        val person2 = arbitraryPerson().next()
+        repository.add(person2) shouldBe true
+
+        // CREATE counter should not have increased since we canceled the subscription
+        eventually(100.milliseconds) {
+            createEventsReceived.get() shouldBe 1
+            receivedPersonIds shouldContainOnly setOf(person.id) // Should not contain person2.id
+        }
+
+        // But UPDATE subscription should still work
+        repository.runForSingle(person2.id) { it.money = it.money?.plus(100) } shouldBe true
+
+        eventually(100.milliseconds) {
+            updateEventsReceived.get() shouldBe 2
+        }
+
+        // Cancel the UPDATE subscription too
+        updateSubscription.cancel()
     }
 })

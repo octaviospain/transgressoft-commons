@@ -18,6 +18,12 @@
 package net.transgressoft.commons.persistence
 
 import net.transgressoft.commons.entity.IdentifiableEntity
+import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
+import net.transgressoft.commons.event.FlowEventPublisher
+import net.transgressoft.commons.event.StandardCrudEvent.Read
+import net.transgressoft.commons.event.StandardCrudEvent.Update
+import net.transgressoft.commons.event.TransEventPublisher
 import mu.KotlinLogging
 import java.util.*
 import java.util.function.Consumer
@@ -29,7 +35,7 @@ import java.util.stream.Collectors
  *
  * `RegistryBase` provides the foundation for entity collections that can be searched and
  * queried, with changes tracked and published to subscribers. It follows a reactive approach
- * by implementing [java.util.concurrent.Flow.Publisher], notifying subscribers of read operations
+ * by implementing [TransEventPublisher], notifying subscribers of read operations
  * and entity changes.
  *
  * Key features:
@@ -40,17 +46,23 @@ import java.util.stream.Collectors
  *
  * @param K The type of entity identifier, must be [Comparable]
  * @param T The type of entity being stored, must implement [IdentifiableEntity]
- * @property name A descriptive name for this registry, used in logging
  * @property entitiesById The internal map storing entities by their IDs
  *
- * @see [CrudEventPublisherBase]
+ * @see [net.transgressoft.commons.event.TransEventSubscriber]
  */
 abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
-    name: String,
-    protected val entitiesById: MutableMap<K, T> = hashMapOf()
-) : CrudEventPublisherBase<K, T>(name),
+    protected val entitiesById: MutableMap<K, T> = hashMapOf(),
+    protected val publisher: TransEventPublisher<CrudEvent.Type, CrudEvent<K, T>> = FlowEventPublisher("Registry")
+) : TransEventPublisher<CrudEvent.Type, CrudEvent<K, T>> by publisher,
     Registry<K, T> where K : Comparable<K> {
     private val log = KotlinLogging.logger(javaClass.name)
+
+    init {
+        // A registry can't create or delete entities,
+        // so the CREATE and DELETE events are disabled by default
+        // READ is disabled also because its use case is not clear yet
+        activateEvents(UPDATE)
+    }
 
     @Suppress("UNCHECKED_CAST")
     override fun runForSingle(id: K, entityAction: Consumer<T>): Boolean {
@@ -62,7 +74,7 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
 
         if (previousHashcode != entity.hashCode()) {
             log.debug { "Entity with id ${entity.id} was modified as a result of an action" }
-            putUpdateEvent(entity, entityBeforeUpdate)
+            publisher.emitAsync(Update(entity, entityBeforeUpdate))
             return true
         }
         return false
@@ -100,7 +112,7 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
 
         if (updates.isNotEmpty()) {
             val (modified, originals) = updates.unzip()
-            putUpdateEvent(modified, originals)
+            publisher.emitAsync(Update(modified, originals))
             return true
         }
 
@@ -129,20 +141,27 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
         entitiesById.values.stream()
             .filter { predicate.test(it) }
             .collect(Collectors.toSet())
-            .also { putReadEvent(it) }
+            .also { publisher.emitAsync(Read(it)) }
+
+    override fun search(size: Int, predicate: Predicate<T>): Set<T> =
+        entitiesById.values.asSequence()
+            .filter { predicate.test(it) }
+            .take(size)
+            .toSet()
+            .also { publisher.emitAsync(Read(it)) }
 
     override fun findFirst(predicate: Predicate<T>): Optional<T> =
         Optional.ofNullable(entitiesById.values.firstOrNull { predicate.test(it) })
             .also {
                 if (it.isPresent)
-                    putReadEvent(it.get())
+                    publisher.emitAsync(Read(it.get()))
             }
 
     override fun findById(id: K): Optional<T> =
         Optional.ofNullable(entitiesById[id])
             .also {
                 if (it.isPresent)
-                    putReadEvent(it.get())
+                    publisher.emitAsync(Read(it.get()))
             }
 
     override fun findByUniqueId(uniqueId: String): Optional<T> =
@@ -151,7 +170,7 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
             .findAny()
             .also {
                 if (it.isPresent)
-                    putReadEvent(it.get())
+                    publisher.emitAsync(Read(it.get()))
             }
 
     override fun size() = entitiesById.size

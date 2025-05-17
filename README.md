@@ -197,7 +197,7 @@ object MapIntPersonSerializer : KSerializer<Map<Int, Person>> {
 }
 
 // Define your repository class
-class PersonJsonFileRepository(file: File) : JsonFileRepositoryBase<Int, Person>(
+class PersonJsonFileRepository(file: File) : JsonFileRepository<Int, Person>(
     name = "PersonRepository",
     file = file,
     mapSerializer = MapIntPersonSerializer
@@ -292,7 +292,7 @@ subscription.cancel();
 
 ```java
 // Create a repository for Person entities
-var repository = new VolatilePersonRepository();
+var repository = new VolatileRepository<Int, Person>();
 
 // Subscribe to all events from the repository
 var subscription = repository.subscribe(event -> {

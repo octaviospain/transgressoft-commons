@@ -19,12 +19,16 @@ package net.transgressoft.commons.persistence.json
 
 import net.transgressoft.commons.entity.ReactiveEntity
 import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.CrudEvent.Type.CREATE
+import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.ReactiveScope
 import net.transgressoft.commons.event.TransEventSubscription
-import net.transgressoft.commons.persistence.RepositoryBase
+import net.transgressoft.commons.persistence.Repository
+import net.transgressoft.commons.persistence.VolatileRepository
 import mu.KotlinLogging
 import java.io.File
+import java.util.Objects
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
@@ -41,32 +45,30 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 
 /**
- * Base abstract class for repositories that store entities in a JSON file.
+ * Base class for repositories that store entities in a JSON file.
  *
  * This class handles the serialization and deserialization of entities to/from a JSON file,
- * providing persistent storage with asynchronous write operations. It extends [RepositoryBase]
+ * providing persistent storage with asynchronous write operations. It extends [VolatileRepository]
  * with file I/O capabilities, ensuring that repository operations are automatically persisted.
  *
  * Key features:
  * - Asynchronous JSON serialization using debouncing to optimize I/O operations
  * - Automatic persistence of all repository operations
- * - Thread-safe operations using ConcurrentHashMap by the upstream [RepositoryBase]
+ * - Thread-safe operations using ConcurrentHashMap by the upstream [Repository]
  * - Error handling with logging
  * - Subscription management for entity lifecycle
  *
- * @param name A descriptive name for this repository, used in logging
  * @param K The type of entity identifier, must be [Comparable]
  * @param R The type of entity being stored, must implement [ReactiveEntity]
  * @param file The JSON file to store entities in
  * @param mapSerializer The serializer used to convert entities to/from JSON
  * @param repositorySerializersModule Optional module for configuring JSON serialization
  */
-abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R>>(
-    name: String,
+open class JsonFileRepository<K : Comparable<K>, R : ReactiveEntity<K, R>>(
     file: File,
     private val mapSerializer: KSerializer<Map<K, R>>,
     private val repositorySerializersModule: SerializersModule = SerializersModule {}
-) : RepositoryBase<K, R>("$name-$file", ConcurrentHashMap()), JsonRepository<K, R> {
+) : VolatileRepository<K, R>("JsonFileRepository-${file.name}"), JsonRepository<K, R> {
     private val log = KotlinLogging.logger(javaClass.name)
 
     final override var jsonFile: File = file
@@ -97,14 +99,14 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
 
     /**
      * This coroutine scope is used to handle all emissions to the
-     * json serialization job for a fire and forget approach
+     * JSON serialization job for a fire and forget approach
      */
     private val flowScope: CoroutineScope = ReactiveScope.flowScope
 
     private val serializationEventChannel = Channel<Unit>(Channel.CONFLATED)
 
     /**
-     * Subscriptions map for each entity in the repository is needed in order to unsubscribe
+     * Subscriptions map for each entity in the repository are needed to unsubscribe
      * from their changes once they are removed.
      */
     private val subscriptionsMap: MutableMap<K, TransEventSubscription<in R, CrudEvent.Type, EntityChangeEvent<K, R>>> = ConcurrentHashMap()
@@ -124,20 +126,24 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
             }
         }
 
-        // Load entities from JSON file on initialization and create subscriptions
+        disableEvents(CREATE, UPDATE)
+
+        // Load entities from the JSON file on initialization and create subscriptions
         decodeFromJson()?.let { loadedEntities ->
             log.info { "${loadedEntities.size} objects deserialized from file $jsonFile" }
 
-            entitiesById.putAll(loadedEntities)
+            addOrReplaceAll(loadedEntities.values.toSet())
 
             // Create subscriptions for loaded entities
             flowScope.launch {
-                entitiesById.values.forEach { entity ->
+                runForAll { entity ->
                     val subscription = entity.subscribe { serializationEventChannel.trySend(Unit) }
                     subscriptionsMap[entity.id] = subscription
                 }
             }
         }
+
+        activateEvents(CREATE, UPDATE)
     }
 
     /**
@@ -242,4 +248,13 @@ abstract class JsonFileRepositoryBase<K : Comparable<K>, R : ReactiveEntity<K, R
         }
         subscriptionsMap.clear()
     }
+
+    override fun hashCode() = Objects.hashCode(jsonFile)
+
+    override fun equals(other: Any?) =
+        if (other is JsonFileRepository<*, *>) {
+            jsonFile == other.jsonFile
+        } else {
+            false
+        }
 }

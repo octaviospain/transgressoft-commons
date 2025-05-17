@@ -2,14 +2,10 @@ package net.transgressoft.commons
 
 import net.transgressoft.commons.entity.ReactiveEntity
 import net.transgressoft.commons.entity.ReactiveEntityBase
-import net.transgressoft.commons.event.CrudEvent.Type.CREATE
-import net.transgressoft.commons.event.CrudEvent.Type.DELETE
-import net.transgressoft.commons.event.CrudEvent.Type.READ
-import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.EventType
 import net.transgressoft.commons.event.TransEvent
-import net.transgressoft.commons.persistence.VolatileRepository
-import net.transgressoft.commons.persistence.json.JsonFileRepositoryBase
+import net.transgressoft.commons.persistence.json.JsonFileRepository
+import net.transgressoft.commons.persistence.json.JsonRepository
 import net.transgressoft.commons.persistence.json.TransEntityPolymorphicSerializer
 import io.kotest.property.Arb
 import io.kotest.property.arbitrary.arbitrary
@@ -19,7 +15,6 @@ import io.kotest.property.arbitrary.positiveInt
 import io.kotest.property.arbitrary.stringPattern
 import java.io.File
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -37,13 +32,15 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 
-interface Human<H : Human<H>> : ReactiveEntity<Int, H> {
+interface Human<H: Human<H>>: ReactiveEntity<Int, H> {
+
     override val id: Int
     var name: String?
     val money: Long?
 }
 
-interface Personly : Human<Personly> {
+interface Personly: Human<Personly> {
+
     val morals: Boolean
 }
 
@@ -54,7 +51,8 @@ data class Person(
     @SerialName("name") private var initialName: String? = null,
     override var money: Long?,
     override val morals: Boolean
-) : Personly, ReactiveEntityBase<Int, Personly>() {
+): Personly, ReactiveEntityBase<Int, Personly>() {
+
     @Transient
     override var name: String? = initialName
         get() = initialName
@@ -71,11 +69,12 @@ data class Person(
 }
 
 sealed class PersonEventType {
-    enum class Type(override val code: Int) : EventType {
+    enum class Type(override val code: Int): EventType {
         BORN(201)
     }
 
-    private data class Born<T : Personly>(val genre: Boolean, override val entities: Map<Int, Personly>) : TransEvent<Type> {
+    private data class Born<T: Personly>(val genre: Boolean, override val entities: Map<Int, Personly>): TransEvent<Type> {
+
         override val type: PersonEventType.Type = Type.BORN
     }
 }
@@ -92,31 +91,35 @@ fun arbitraryPerson(id: Int = defaultId) =
         )
     }
 
-class VolatilePersonRepository : VolatileRepository<Int, Person>("VolatilePersonRepository") {
-    init {
-        activateEvents(CREATE, READ, UPDATE, DELETE)
-    }
+abstract class HumanGenericJsonFileRepositoryBase<H: Human<H>>(private val repository: JsonFileRepository<Int, H>): JsonRepository<Int, H> by repository {
+
+    override fun hashCode(): Int = repository.hashCode()
+
+    override fun equals(other: Any?): Boolean =
+        if (this === other) true
+        else if (other is HumanGenericJsonFileRepositoryBase<*>) repository == other.repository
+        else false
 }
 
-abstract class HumanGenericJsonFileRepositoryBase<H : Human<H>>(
-    name: String,
-    file: File,
-    humanSerializer: KSerializer<H>
-) :
-    JsonFileRepositoryBase<Int, H>(
-            name,
-            file, MapSerializer(Int.Companion.serializer(), humanSerializer),
-            SerializersModule {
-                polymorphic(Human::class) {
-                    subclass(Person::class, Person.serializer())
-                }
+class PersonJsonFileRepository(file: File): HumanGenericJsonFileRepositoryBase<Personly>(
+    JsonFileRepository(
+        file,
+        MapSerializer(Int.Companion.serializer(), PersonlySerializer()),
+        SerializersModule {
+            polymorphic(Human::class) {
+                subclass(Person::class, Person.serializer())
             }
-        )
+        }
+    )
+) {
 
-open class PersonJsonFileRepository(file: File) :
-    HumanGenericJsonFileRepositoryBase<Personly>("PersonRepo", file, PersonlySerializer())
+    override fun hashCode(): Int = super.hashCode()
 
-class PersonlySerializer : HumanSerializer<Personly>() {
+    override fun equals(other: Any?): Boolean = super.equals(other)
+}
+
+class PersonlySerializer: HumanSerializer<Personly>() {
+
     override fun additionalElements(classSerialDescriptorBuilder: ClassSerialDescriptorBuilder) {
         classSerialDescriptorBuilder.element<Boolean>("morals")
     }

@@ -43,4 +43,12 @@ interface CrudEvent<K, T: IdentifiableEntity<K>>: TransEvent<CrudEvent.Type> whe
     }
 
     override val entities: Map<K, T>
+
+    fun isCreate() = type == Type.CREATE
+
+    fun isRead() = type == Type.READ
+
+    fun isUpdate() = type == Type.UPDATE
+
+    fun isDelete() = type == Type.DELETE
 }

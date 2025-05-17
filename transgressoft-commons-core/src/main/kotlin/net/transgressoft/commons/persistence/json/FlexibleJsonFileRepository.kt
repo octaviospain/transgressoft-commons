@@ -71,8 +71,7 @@ import kotlinx.serialization.json.put
  */
 @Suppress("UNCHECKED_CAST")
 open class FlexibleJsonFileRepository(jsonFile: File) :
-    JsonFileRepositoryBase<String, ReactivePrimitive<Any>>(
-        "FlexibleJsonFileRepository",
+    JsonFileRepository<String, ReactivePrimitive<Any>>(
         jsonFile,
         ReactiveValueMapSerializer
     ) {

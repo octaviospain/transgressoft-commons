@@ -1,16 +1,29 @@
-package net.transgressoft.commons.entity
+/******************************************************************************
+ *     Copyright (C) 2025  Octavio Calleya Garcia                             *
+ *                                                                            *
+ *     This program is free software: you can redistribute it and/or modify   *
+ *     it under the terms of the GNU General Public License as published by   *
+ *     the Free Software Foundation, either version 3 of the License, or      *
+ *     (at your option) any later version.                                    *
+ *                                                                            *
+ *     This program is distributed in the hope that it will be useful,        *
+ *     but WITHOUT ANY WARRANTY; without even the implied warranty of         *
+ *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          *
+ *     GNU General Public License for more details.                           *
+ *                                                                            *
+ *     You should have received a copy of the GNU General Public License      *
+ *     along with this program.  If not, see <https://www.gnu.org/licenses/>. *
+ ******************************************************************************/
 
-import net.transgressoft.commons.event.CrudEvent
+package net.transgressoft.commons.event
+
+import net.transgressoft.commons.entity.ReactiveEntityBase
 import net.transgressoft.commons.event.CrudEvent.Type.CREATE
 import net.transgressoft.commons.event.CrudEvent.Type.DELETE
 import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
-import net.transgressoft.commons.event.EntityChangeEvent
-import net.transgressoft.commons.event.FlowEventPublisher
-import net.transgressoft.commons.event.ReactiveScope
-import net.transgressoft.commons.event.isCreate
-import net.transgressoft.commons.event.isDelete
-import net.transgressoft.commons.event.isUpdate
-import net.transgressoft.commons.persistence.CrudEventPublisherBase
+import net.transgressoft.commons.event.StandardCrudEvent.Create
+import net.transgressoft.commons.event.StandardCrudEvent.Delete
+import net.transgressoft.commons.event.StandardCrudEvent.Update
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -25,8 +38,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 
-@OptIn(ExperimentalCoroutinesApi::class)
-class ReactiveEntityTest : StringSpec({
+@ExperimentalCoroutinesApi
+class FlowEventPublisherTest : StringSpec({
     val testDispatcher = UnconfinedTestDispatcher()
     val testScope = CoroutineScope(testDispatcher)
 
@@ -40,7 +53,7 @@ class ReactiveEntityTest : StringSpec({
         ReactiveScope.resetDefaultFlowScope()
     }
 
-    "ReactiveEntityBase should notify subscribers when a property changes" {
+    "ReactiveEntity should notify subscribers when a property changes" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
 
@@ -64,7 +77,7 @@ class ReactiveEntityTest : StringSpec({
         subscription.cancel()
     }
 
-    "ReactiveEntityBase should not notify subscribers when a property is set to the same value" {
+    "ReactiveEntity should not notify subscribers when a property is set to the same value" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
 
@@ -83,7 +96,7 @@ class ReactiveEntityTest : StringSpec({
         subscription.cancel()
     }
 
-    "ReactiveEntityBase should update lastDateModified when a property changes" {
+    "ReactiveEntity should update lastDateModified when a property changes" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val initialDate = entity.lastDateModified
 
@@ -165,8 +178,11 @@ class ReactiveEntityTest : StringSpec({
         counter.get() shouldBe 1
     }
 
-    "CrudEventPublisherBase should publish CREATE events" {
-        val publisher = TestCrudEventPublisher()
+    "FlowEventPublisher should publish CREATE events" {
+        val publisher =
+            FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("Publisher").apply {
+                activateEvents(CREATE)
+            }
         val receivedEvents = mutableListOf<CrudEvent<String, TestEntity>>()
 
         val subscription =
@@ -177,7 +193,7 @@ class ReactiveEntityTest : StringSpec({
             }
 
         val entity = TestEntity(UUID.randomUUID().toString())
-        publisher.create(entity)
+        publisher.emitAsync(Create(entity))
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -188,8 +204,11 @@ class ReactiveEntityTest : StringSpec({
         subscription.cancel()
     }
 
-    "CrudEventPublisherBase should publish UPDATE events" {
-        val publisher = TestCrudEventPublisher()
+    "FlowEventPublisher should publish UPDATE events" {
+        val publisher =
+            FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("Publisher").apply {
+                activateEvents(UPDATE)
+            }
         val receivedEvents = mutableListOf<CrudEvent<String, TestEntity>>()
 
         val subscription =
@@ -203,7 +222,7 @@ class ReactiveEntityTest : StringSpec({
         val updatedEntity = originalEntity.clone()
         updatedEntity.name = "Updated Name"
 
-        publisher.update(updatedEntity, originalEntity)
+        publisher.emitAsync(Update(updatedEntity, originalEntity))
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -215,8 +234,11 @@ class ReactiveEntityTest : StringSpec({
         subscription.cancel()
     }
 
-    "CrudEventPublisherBase should publish DELETE events" {
-        val publisher = TestCrudEventPublisher()
+    "FlowEventPublisher should publish DELETE events" {
+        val publisher =
+            FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("Publisher").apply {
+                activateEvents(DELETE)
+            }
         val receivedEvents = mutableListOf<CrudEvent<String, TestEntity>>()
 
         val subscription =
@@ -227,7 +249,7 @@ class ReactiveEntityTest : StringSpec({
             }
 
         val entity = TestEntity(UUID.randomUUID().toString())
-        publisher.delete(entity)
+        publisher.emitAsync(Delete(entity))
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -238,8 +260,8 @@ class ReactiveEntityTest : StringSpec({
         subscription.cancel()
     }
 
-    "CrudEventPublisherBase should handle subscriber for specific event type" {
-        val publisher = TestCrudEventPublisher()
+    "FlowEventPublisher should handle subscriber for specific event type" {
+        val publisher = FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("Publisher")
         val createCounter = AtomicInteger(0)
         val updateCounter = AtomicInteger(0)
         val deleteCounter = AtomicInteger(0)
@@ -249,14 +271,14 @@ class ReactiveEntityTest : StringSpec({
         val deleteSubscription = publisher.subscribe(DELETE) { deleteCounter.incrementAndGet() }
 
         val entity = TestEntity(UUID.randomUUID().toString())
-        publisher.create(entity)
+        publisher.emitAsync(Create(entity))
 
         val originalEntity = TestEntity(UUID.randomUUID().toString())
         val updatedEntity = originalEntity.clone()
         updatedEntity.name = "Updated Name"
-        publisher.update(updatedEntity, originalEntity)
+        publisher.emitAsync(Update(updatedEntity, originalEntity))
 
-        publisher.delete(entity)
+        publisher.emitAsync(Delete(entity))
 
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -327,18 +349,4 @@ class TestEntity(override val id: String) : ReactiveEntityBase<String, TestEntit
     }
 
     override fun toString(): String = "TestEntity(id=$id, name=$name, description=$description)"
-}
-
-class TestCrudEventPublisher : CrudEventPublisherBase<String, TestEntity>("TestPublisher") {
-    fun create(entity: TestEntity) {
-        putCreateEvent(entity)
-    }
-
-    fun update(entity: TestEntity, oldEntity: TestEntity) {
-        putUpdateEvent(entity, oldEntity)
-    }
-
-    fun delete(entity: TestEntity) {
-        putDeleteEvent(entity)
-    }
 }

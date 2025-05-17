@@ -1,7 +1,7 @@
 package net.transgressoft.commons.persistence.json
 
 import net.transgressoft.commons.Man
-import net.transgressoft.commons.ManGenericJsonFileRepository
+import net.transgressoft.commons.ManJsonFileRepository
 import net.transgressoft.commons.Person
 import net.transgressoft.commons.PersonJsonFileRepository
 import net.transgressoft.commons.Personly
@@ -82,7 +82,10 @@ class JsonFileRepositoryTest: StringSpec({
         }"""
 
         jsonFile.readText().shouldEqualJson(expectedRepositoryJson)
-        PersonJsonFileRepository(jsonFile) shouldBe repository
+
+        val secondRepository = PersonJsonFileRepository(jsonFile)
+        secondRepository.equals(repository) shouldBe true
+        secondRepository.close()
     }
 
     "Repository serializes itself to file when element is added or replaced" {
@@ -107,7 +110,8 @@ class JsonFileRepositoryTest: StringSpec({
         testDispatcher.scheduler.advanceUntilIdle()
         jsonFile.readText().shouldEqualJson(expectedRepositoryJson)
 
-        val secondRepository = PersonJsonFileRepository(file = jsonFile) shouldBe repository
+        val secondRepository = PersonJsonFileRepository(jsonFile)
+        secondRepository.equals(repository) shouldBe true
         secondRepository.close()
     }
 
@@ -309,7 +313,7 @@ class JsonFileRepositoryTest: StringSpec({
             }"""
         )
 
-        val manRepository = ManGenericJsonFileRepository(jsonFile)
+        val manRepository = ManJsonFileRepository(jsonFile)
         manRepository.size() shouldBe 1
         manRepository.findById(man.id) shouldBePresent { it shouldBe man }
 
@@ -476,6 +480,7 @@ class JsonFileRepositoryTest: StringSpec({
                 every { canWrite() } returns true
                 every { extension } returns "json"
                 every { readText() } returns "{}"
+                every { name } returns "test.json"
             }
 
         val ioFailureRepo = PersonJsonFileRepository(testFile)

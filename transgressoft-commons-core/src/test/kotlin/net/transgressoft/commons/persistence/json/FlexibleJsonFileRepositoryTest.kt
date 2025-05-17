@@ -10,7 +10,7 @@ import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@ExperimentalCoroutinesApi
 class FlexibleJsonFileRepositoryTest : StringSpec({
 
     lateinit var repository: FlexibleJsonFileRepository

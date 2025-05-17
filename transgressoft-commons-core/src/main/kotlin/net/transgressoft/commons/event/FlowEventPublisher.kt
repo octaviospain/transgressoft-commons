@@ -107,7 +107,7 @@ class FlowEventPublisher<ET : EventType, E: TransEvent<ET>>(id: String): TransEv
     override fun emitAsync(event: E) {
         if (event.type in activatedEventTypes) {
             // Use trySend so we don't block the caller
-            // If channel is full, this will return closed/failed result
+            // If the channel is full, this will return the closed/failed result
             val result = eventChannel.trySend(event)
             if (!result.isSuccess) {
                 log.warn { "Could not send event to channel, buffer full or closed: $event" }

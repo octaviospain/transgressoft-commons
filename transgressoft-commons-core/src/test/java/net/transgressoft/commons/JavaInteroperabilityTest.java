@@ -7,6 +7,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi;
 import kotlinx.coroutines.test.TestCoroutineDispatchersKt;
 import kotlinx.coroutines.test.TestCoroutineScheduler;
 import net.transgressoft.commons.event.ReactiveScope;
+import net.transgressoft.commons.persistence.VolatileRepository;
 import net.transgressoft.commons.persistence.json.FlexibleJsonFileRepository;
 import net.transgressoft.commons.persistence.json.primitives.ReactiveString;
 import org.junit.jupiter.api.AfterAll;
@@ -37,7 +38,7 @@ class JavaInteroperabilityTest {
     @BeforeAll
     @ExperimentalCoroutinesApi
     static void setupTestDispatchers() {
-        // Setup a TestCoroutineScheduler that allows us to control the virtual time in tests
+        // Set up a TestCoroutineScheduler that allows us to control the virtual time in tests
         scheduler = new TestCoroutineScheduler();
         // Create an UnconfinedTestDispatcher which processes coroutines eagerly and can be controlled by the scheduler
         CoroutineDispatcher testDispatcher = TestCoroutineDispatchersKt.UnconfinedTestDispatcher(scheduler, null);
@@ -93,7 +94,7 @@ class JavaInteroperabilityTest {
     }
 
     /**
-     * Tests reactive entity pattern shown in the README.md Java example.
+     * Tests a reactive entity pattern shown in the README.md Java example.
      */
     @Test
     @DisplayName("Reactive entity test")
@@ -134,13 +135,13 @@ class JavaInteroperabilityTest {
     }
 
     /**
-     * Tests repository pattern shown in the README.md Java example.
+     * Tests a repository pattern shown in the README.md Java example.
      */
     @Test
     @DisplayName("Repository test")
     void repositoryTest() {
         // Create a repository for Person entities
-        var repository = new VolatilePersonRepository();
+        var repository = new VolatileRepository<Integer, Person>("PersonRepository");
         
         var eventEntities = new ArrayList<Person>();
 

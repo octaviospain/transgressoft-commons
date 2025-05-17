@@ -2,13 +2,18 @@ package net.transgressoft.commons
 
 import net.transgressoft.commons.entity.ReactiveEntityBase
 import net.transgressoft.commons.event.FlowEventPublisher
+import net.transgressoft.commons.persistence.json.JsonFileRepository
 import java.io.File
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.ClassSerialDescriptorBuilder
 import kotlinx.serialization.descriptors.element
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.CompositeEncoder
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.polymorphic
 
 interface Manly : Human<Manly> {
     val beard: Boolean
@@ -27,8 +32,18 @@ data class Man(
     override fun clone(): Man = copy()
 }
 
-open class ManGenericJsonFileRepository(file: File) :
-    HumanGenericJsonFileRepositoryBase<Manly>("ManRepo", file, ManlySerializer())
+open class ManJsonFileRepository(file: File) :
+    HumanGenericJsonFileRepositoryBase<Manly>(
+        JsonFileRepository(
+            file,
+            MapSerializer(Int.Companion.serializer(), ManlySerializer()),
+            SerializersModule {
+                polymorphic(Human::class) {
+                    subclass(Person::class, Person.serializer())
+                }
+            }
+        )
+    )
 
 class ManlySerializer : HumanSerializer<Manly>() {
     override fun additionalElements(classSerialDescriptorBuilder: ClassSerialDescriptorBuilder) {

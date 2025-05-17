@@ -18,6 +18,8 @@
 package net.transgressoft.commons.persistence
 
 import net.transgressoft.commons.entity.IdentifiableEntity
+import net.transgressoft.commons.event.CrudEvent
+import net.transgressoft.commons.event.TransEventPublisher
 import java.util.*
 import java.util.function.Consumer
 import java.util.function.Predicate
@@ -32,7 +34,7 @@ import java.util.function.Predicate
  * @param K The type of the entity's identifier, which must be [Comparable]
  * @param T The type of entities in the registry, which must implement [IdentifiableEntity]
  */
-interface Registry<K, in T: IdentifiableEntity<K>> where K : Comparable<K> {
+interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEvent.Type, CrudEvent<K, @UnsafeVariance T>> where K : Comparable<K> {
 
     /**
      * Applies the given action to the entity with the specified ID if present.
@@ -104,6 +106,15 @@ interface Registry<K, in T: IdentifiableEntity<K>> where K : Comparable<K> {
      * @return A set of all entities matching the predicate
      */
     fun search(predicate: Predicate<@UnsafeVariance T>): Set<@UnsafeVariance T>
+
+    /**
+     * Returns a limited number of entities that match the specified predicate.
+     *
+     * @param size The maximum number of entities to return
+     * @param predicate The predicate to match entities against
+     * @return A set of entities matching the predicate, limited to the specified size
+     */
+    fun search(size: Int, predicate: Predicate<@UnsafeVariance T>): Set<@UnsafeVariance T>
 
     /**
      * Returns the first entity that matches the specified predicate.

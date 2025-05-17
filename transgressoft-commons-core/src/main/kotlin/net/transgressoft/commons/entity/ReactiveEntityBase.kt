@@ -21,9 +21,9 @@ import net.transgressoft.commons.event.CrudEvent
 import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.FlowEventPublisher
+import net.transgressoft.commons.event.StandardCrudEvent.Update
 import net.transgressoft.commons.event.TransEventPublisher
 import net.transgressoft.commons.event.TransEventSubscription
-import net.transgressoft.commons.event.of
 import mu.KotlinLogging
 import java.time.LocalDateTime
 import java.util.concurrent.Flow
@@ -49,9 +49,11 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
 ) : ReactiveEntity<K, R> where K : Comparable<K> {
     private val log = KotlinLogging.logger {}
 
-    protected constructor() : this(FlowEventPublisher("ReactiveEntityFlowPublisher"))
+    protected constructor() : this(FlowEventPublisher("ReactiveEntity"))
 
     init {
+        // A reactive entity only emits UPDATE events because it
+        // cannot create, delete, or read itself
         publisher.activateEvents(UPDATE)
     }
 
@@ -102,9 +104,7 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
             propertySetAction.accept(newValue)
             lastDateModified = LocalDateTime.now()
             log.trace { "Firing entity update event from $entityBeforeChange to $this" }
-            val event = UPDATE.of(this, entityBeforeChange) as EntityChangeEvent<K, R>
-
-            publisher.emitAsync(event)
+            publisher.emitAsync(Update(this, entityBeforeChange) as EntityChangeEvent<K, R>)
         }
     }
 }

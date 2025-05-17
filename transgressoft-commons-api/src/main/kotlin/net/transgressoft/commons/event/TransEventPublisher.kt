@@ -35,7 +35,7 @@ import kotlinx.coroutines.flow.SharedFlow
 interface TransEventPublisher<ET : EventType, E : TransEvent<ET>> : Flow.Publisher<E> {
 
     /**
-     * A flow of entity change events that can be observed by collectors.
+     * A flow of entity change events that collectors can observe.
      */
     val changes: SharedFlow<E>
 

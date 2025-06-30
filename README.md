@@ -1,3 +1,4 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/octaviospain/transgressoft-commons)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/octaviospain/transgressoft-commons/.github%2Fworkflows%2Fbuild.yml?logo=github)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=net.transgressoft%3Atransgressoft-commons&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=net.transgressoft%3Atransgressoft-commons)
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=net.transgressoft%3Atransgressoft-commons&metric=bugs)](https://sonarcloud.io/summary/new_code?id=net.transgressoft%3Atransgressoft-commons)
@@ -13,6 +14,18 @@ A reactive library for Kotlin & Java projects that implements the Publisher-Subs
 Transgressoft Commons provides a framework for entities that follow a 'reactive' approach based on the Publisher-Subscriber pattern. This allows objects to subscribe to changes in others while maintaining clean boundaries and separation of concerns.
 
 The approach is inspired by object-oriented design principles where entities aren't merely passive data structures, but active objects with their own behaviors and responsibilities. Instead of other objects directly manipulating an entity's state, they subscribe to its changes, creating a more decoupled and maintainable system.
+
+### What Makes Transgressoft Commons Different?
+
+While libraries like [Kotlin Flow](https://github.com/Kotlin/kotlinx.coroutines), [RxJava](https://github.com/ReactiveX/RxJava), and [Guava EventBus](https://github.com/google/guava/wiki/EventBusExplained) offer powerful tools for reactive programming and event handling, Transgressoft Commons provides a higher-level, opinionated framework designed to accelerate development with out-of-the-box features.
+
+Instead of being a general-purpose toolkit, it offers a specific, entity-centric approach to reactivity:
+
+*   **Entity-First Reactivity:** At its core, the library is built around the concept of "Reactive Entities." This encourages a more object-oriented design where your domain objects are inherently reactive, automatically publishing events when their state changes.
+*   **Automated Persistence:** A key innovation is the `JsonRepository`, which provides automatic, thread-safe, and debounced JSON serialization. This means you can have a persistent, reactive collection of objects with minimal boilerplate code.
+*   **Simplified API:** By providing a more focused API, Transgressoft Commons simplifies the development of reactive systems. It offers a clear path for building event-driven applications without the steep learning curve of more complex reactive libraries.
+
+In essence, Transgressoft Commons is a lightweight framework that builds upon the power of libraries like [Kotlin Coroutines](https://github.com/Kotlin/kotlinx.coroutines) and [Kotlin Serialization](https://github.com/Kotlin/kotlinx.serialization) to provide a ready-to-use solution for building reactive, persistent applications in a clean, decoupled, and object-oriented way.
 
 **Requirements:**
 * Java 17+

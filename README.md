@@ -1,5 +1,5 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/octaviospain/transgressoft-commons)
-![Maven Central Version](https://img.shields.io/maven-central/v/net.transgressoft/transgressoft-commons)
+![Maven Central Version](https://img.shields.io/maven-central/v/net.transgressoft/transgressoft-commons-api)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/octaviospain/transgressoft-commons/.github%2Fworkflows%2Fbuild.yml?logo=github)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=net.transgressoft%3Atransgressoft-commons&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=net.transgressoft%3Atransgressoft-commons)
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=net.transgressoft%3Atransgressoft-commons&metric=bugs)](https://sonarcloud.io/summary/new_code?id=net.transgressoft%3Atransgressoft-commons)

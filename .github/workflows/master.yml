@@ -1,21 +1,16 @@
-name: CI build
+name: Master CI build
 
 on:
-    pull_request:
+    push:
         branches:
         - master
-        types: [ opened, synchronize, reopened ]
         paths-ignore:
             - "**.md"
             - '.gitignore'
             - 'docs/**'
 
-    push:
-        branches:
-        - master
-
 jobs:
-    build-and-analyze:
+    build-analyze-release:
         runs-on: ubuntu-latest
 
         steps:

@@ -80,14 +80,15 @@ sealed class PersonEventType {
 }
 
 private val defaultId = -1
+private val defaultMoney = -1L
 
-fun arbitraryPerson(id: Int = defaultId) =
+fun arbitraryPerson(id: Int = defaultId, money: Long = defaultMoney) =
     arbitrary {
         Person(
-            id = if (id == defaultId) Arb.Companion.positiveInt(500_000).bind() else id,
-            initialName = Arb.Companion.stringPattern("[a-z]{5} [a-z]{5}").bind(),
-            money = Arb.Companion.long(0, Long.MAX_VALUE - 1).bind(),
-            morals = Arb.Companion.boolean().bind()
+            id = if (id == defaultId) Arb.positiveInt(500_000).bind() else id,
+            initialName = Arb.stringPattern("[a-z]{5} [a-z]{5}").bind(),
+            money = if (money == defaultMoney) Arb.Companion.long(0, Long.MAX_VALUE - 1).bind() else money,
+            morals = Arb.boolean().bind()
         )
     }
 
@@ -104,7 +105,7 @@ abstract class HumanGenericJsonFileRepositoryBase<H: Human<H>>(private val repos
 class PersonJsonFileRepository(file: File): HumanGenericJsonFileRepositoryBase<Personly>(
     JsonFileRepository(
         file,
-        MapSerializer(Int.Companion.serializer(), PersonlySerializer()),
+        MapSerializer(Int.serializer(), PersonlySerializer()),
         SerializersModule {
             polymorphic(Human::class) {
                 subclass(Person::class, Person.serializer())
@@ -166,7 +167,7 @@ abstract class HumanSerializer<H : Human<H>> : TransEntityPolymorphicSerializer<
 
         loop@ while (true) {
             when (val index = compositeDecoder.decodeElementIndex(descriptor)) {
-                CompositeDecoder.Companion.DECODE_DONE -> break@loop
+                CompositeDecoder.DECODE_DONE -> break@loop
                 0 -> compositeDecoder.decodeStringElement(descriptor, index)
                 1 -> propertiesList.add(compositeDecoder.decodeIntElement(descriptor, index))
                 2 -> propertiesList.add(compositeDecoder.decodeNullableSerializableElement(descriptor, index, String.serializer().nullable))

@@ -32,8 +32,10 @@ import java.util.UUID
 import java.util.concurrent.Flow
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Consumer
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -53,7 +55,7 @@ class FlowEventPublisherTest : StringSpec({
         ReactiveScope.resetDefaultFlowScope()
     }
 
-    "ReactiveEntity should notify subscribers when a property changes" {
+    "ReactiveEntity emits change event on property modification" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
 
@@ -77,7 +79,7 @@ class FlowEventPublisherTest : StringSpec({
         subscription.cancel()
     }
 
-    "ReactiveEntity should not notify subscribers when a property is set to the same value" {
+    "ReactiveEntity does not emit change event when property is set to its current value" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
 
@@ -96,7 +98,7 @@ class FlowEventPublisherTest : StringSpec({
         subscription.cancel()
     }
 
-    "ReactiveEntity should update lastDateModified when a property changes" {
+    "ReactiveEntity updates lastDateModified on property modification" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val initialDate = entity.lastDateModified
 
@@ -108,7 +110,7 @@ class FlowEventPublisherTest : StringSpec({
         entity.lastDateModified.isAfter(initialDate) shouldBe true
     }
 
-    "FlowEventPublisher should handle multiple subscribers" {
+    "FlowEventPublisher distributes events to multiple subscribers" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val counter1 = AtomicInteger(0)
         val counter2 = AtomicInteger(0)
@@ -135,7 +137,7 @@ class FlowEventPublisherTest : StringSpec({
         subscription2.cancel()
     }
 
-    "FlowEventPublisher should support Java Consumer subscriptions" {
+    "FlowEventPublisher supports Java Consumer subscriptions" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val counter = AtomicInteger(0)
 
@@ -150,7 +152,7 @@ class FlowEventPublisherTest : StringSpec({
         subscription.cancel()
     }
 
-    "FlowEventPublisher should support Flow.Subscriber" {
+    "FlowEventPublisher supports Java Flow.Subscriber subscriptions" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val counter = AtomicInteger(0)
 
@@ -178,7 +180,7 @@ class FlowEventPublisherTest : StringSpec({
         counter.get() shouldBe 1
     }
 
-    "FlowEventPublisher should publish CREATE events" {
+    "FlowEventPublisher publishes CREATE events" {
         val publisher =
             FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("Publisher").apply {
                 activateEvents(CREATE)
@@ -204,7 +206,7 @@ class FlowEventPublisherTest : StringSpec({
         subscription.cancel()
     }
 
-    "FlowEventPublisher should publish UPDATE events" {
+    "FlowEventPublisher publishes UPDATE events" {
         val publisher =
             FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("Publisher").apply {
                 activateEvents(UPDATE)
@@ -234,7 +236,7 @@ class FlowEventPublisherTest : StringSpec({
         subscription.cancel()
     }
 
-    "FlowEventPublisher should publish DELETE events" {
+    "FlowEventPublisher publishes DELETE events" {
         val publisher =
             FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("Publisher").apply {
                 activateEvents(DELETE)
@@ -260,7 +262,7 @@ class FlowEventPublisherTest : StringSpec({
         subscription.cancel()
     }
 
-    "FlowEventPublisher should handle subscriber for specific event type" {
+    "FlowEventPublisher dispatches events to type-specific subscribers" {
         val publisher = FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("Publisher")
         val createCounter = AtomicInteger(0)
         val updateCounter = AtomicInteger(0)
@@ -287,7 +289,7 @@ class FlowEventPublisherTest : StringSpec({
         deleteSubscription.cancel()
     }
 
-    "Flow extensions should collect entity change events" {
+    "ReactiveEntity changes Flow can be collected by Kotlin Flow operators" {
         val entity = TestEntity(UUID.randomUUID().toString())
         testScope.launch {
             val event = entity.changes.first()
@@ -299,7 +301,7 @@ class FlowEventPublisherTest : StringSpec({
         testDispatcher.scheduler.advanceUntilIdle()
     }
 
-    "ReactiveEntityBase should properly clone before modification" {
+    "ReactiveEntity change event includes a deep clone of the old entity" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
 
@@ -325,6 +327,174 @@ class FlowEventPublisherTest : StringSpec({
         (oldEntity !== entity) shouldBe true
 
         subscription.cancel()
+    }
+
+    "Events are processed in order despite rapid emission" {
+        val publisher = FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("TestPublisher")
+        publisher.activateEvents(CREATE, UPDATE, DELETE)
+
+        val receivedEvents = mutableListOf<CrudEvent<String, TestEntity>>()
+        val subscription =
+            publisher.subscribe { event ->
+                receivedEvents.add(event)
+            }
+
+        // Emit events rapidly
+        repeat(100) { i ->
+            val entity = TestEntity("entity-$i")
+            publisher.emitAsync(Create(entity))
+        }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        receivedEvents.size shouldBe 100
+        receivedEvents.forEachIndexed { index, event ->
+            event.entities.values.first().id shouldBe "entity-$index"
+        }
+
+        subscription.cancel()
+    }
+
+    "Multiple subscribers all receive all events in order" {
+        val publisher = FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("TestPublisher")
+        publisher.activateEvents(CREATE)
+
+        val subscriber1Events = mutableListOf<CrudEvent<String, TestEntity>>()
+        val subscriber2Events = mutableListOf<CrudEvent<String, TestEntity>>()
+        val subscriber3Events = mutableListOf<CrudEvent<String, TestEntity>>()
+
+        val sub1 = publisher.subscribe { subscriber1Events.add(it) }
+        val sub2 = publisher.subscribe { subscriber2Events.add(it) }
+        val sub3 = publisher.subscribe { subscriber3Events.add(it) }
+
+        repeat(50) { i ->
+            publisher.emitAsync(Create(TestEntity("entity-$i")))
+        }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        subscriber1Events.size shouldBe 50
+        subscriber2Events.size shouldBe 50
+        subscriber3Events.size shouldBe 50
+
+        // All subscribers received same events in same order
+        subscriber1Events.map { it.entities.values.first().id } shouldBe subscriber2Events.map { it.entities.values.first().id }
+        subscriber2Events.map { it.entities.values.first().id } shouldBe subscriber3Events.map { it.entities.values.first().id }
+
+        sub1.cancel()
+        sub2.cancel()
+        sub3.cancel()
+    }
+
+    "Subscriber can safely emit new events during event handling" {
+        val publisher = FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("TestPublisher")
+        publisher.activateEvents(CREATE, UPDATE)
+
+        val allEvents = mutableListOf<CrudEvent<String, TestEntity>>()
+        val processedCount = AtomicInteger(0)
+
+        val subscription =
+            publisher.subscribe { event ->
+                allEvents.add(event)
+                processedCount.incrementAndGet()
+
+                // Emit a follow-up event during processing (simulating cascading updates)
+                if (event.isCreate()) {
+                    val entity = event.entities.values.first()
+                    val updatedEntity = entity.clone()
+                    publisher.emitAsync(StandardCrudEvent.Update(updatedEntity, entity))
+                }
+            }
+
+        publisher.emitAsync(Create(TestEntity("entity-1")))
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Should have processed: 1 CREATE + 1 UPDATE
+        processedCount.get() shouldBe 2
+        allEvents.size shouldBe 2
+        allEvents[0].isCreate() shouldBe true
+        allEvents[1].isUpdate() shouldBe true
+
+        subscription.cancel()
+    }
+
+    "Channel backpressure handles burst of events without loss" {
+        val publisher = FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("TestPublisher")
+        publisher.activateEvents(CREATE)
+
+        val receivedEvents = mutableListOf<CrudEvent<String, TestEntity>>()
+
+        val subscription =
+            publisher.subscribe { event ->
+                receivedEvents.add(event)
+                // Simulate slow subscriber
+                delay(1.milliseconds)
+            }
+
+        // Burst emit 1000 events rapidly
+        repeat(1000) { i ->
+            publisher.emitAsync(Create(TestEntity("entity-$i")))
+        }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // All events should be received despite slow processing
+        receivedEvents.size shouldBe 1000
+        receivedEvents.forEachIndexed { index, event ->
+            event.entities.values.first().id shouldBe "entity-$index"
+        }
+
+        subscription.cancel()
+    }
+
+    "Late subscriber receives no historical events (no replay)" {
+        val publisher = FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("TestPublisher")
+        publisher.activateEvents(CREATE)
+
+        // Emit events before subscription
+        repeat(10) { i ->
+            publisher.emitAsync(Create(TestEntity("early-$i")))
+        }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val lateSubscriberEvents = mutableListOf<CrudEvent<String, TestEntity>>()
+        val lateSubscription = publisher.subscribe { lateSubscriberEvents.add(it) }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Late subscriber should not receive earlier events
+        lateSubscriberEvents.size shouldBe 0
+
+        // But should receive new events
+        publisher.emitAsync(Create(TestEntity("new-1")))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        lateSubscriberEvents.size shouldBe 1
+        lateSubscriberEvents[0].entities.values.first().id shouldBe "new-1"
+
+        lateSubscription.cancel()
+    }
+
+    "Cancelled subscription stops receiving events immediately" {
+        val publisher = FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>("TestPublisher")
+        publisher.activateEvents(CREATE)
+
+        val receivedEvents = mutableListOf<CrudEvent<String, TestEntity>>()
+        val subscription = publisher.subscribe { receivedEvents.add(it) }
+
+        publisher.emitAsync(Create(TestEntity("before-cancel")))
+        testDispatcher.scheduler.advanceUntilIdle()
+        receivedEvents.size shouldBe 1
+
+        subscription.cancel()
+
+        publisher.emitAsync(Create(TestEntity("after-cancel")))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Should not have received event after cancellation
+        receivedEvents.size shouldBe 1
     }
 })
 

@@ -6,8 +6,8 @@ plugins {
     id 'com.vanniktech.maven.publish' version '0.34.0'
     id 'jacoco-report-aggregation'
     id 'org.jetbrains.dokka' version '2.1.0'
-    id 'org.jetbrains.kotlin.jvm' version '2.1.10'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '2.1.10'
+    id 'org.jetbrains.kotlin.jvm' version '2.2.20'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.2.10'
     id 'org.jlleitschuh.gradle.ktlint' version '13.1.0'
     id 'org.sonarqube' version '7.0.0.6105'
     id 'pl.allegro.tech.build.axion-release' version '1.21.0'
@@ -18,8 +18,8 @@ repositories {
 }
 
 ext {
-    kotlinVersion = '2.1.10'
-    coroutinesVersion = '1.10.1'
+    kotlinVersion = '2.2.20'
+    coroutinesVersion = '1.10.2'
     kotestVersion = '5.9.1'
 }
 
@@ -44,7 +44,7 @@ scmVersion {
     }
     useHighestVersion = true
     ignoreUncommittedChanges = false
-    versionIncrementer 'incrementMinor'
+    versionIncrementer 'incrementPatch'
 }
 
 tasks.withType(PublishToMavenLocal) {

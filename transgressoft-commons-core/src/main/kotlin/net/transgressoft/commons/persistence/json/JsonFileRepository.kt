@@ -108,6 +108,14 @@ open class JsonFileRepository<K : Comparable<K>, R : ReactiveEntity<K, R>>
         private val serializationEventChannel = Channel<Unit>(Channel.CONFLATED)
 
         /**
+         * Shared flow used to trigger serialization of the repository state. Debounced to avoid
+         * excessive serialization operations when multiple changes occur in a short period.
+         */
+        private val serializationTrigger = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+        private val serializationDelay = 300.milliseconds
+
+        /**
          * Subscriptions map for each entity in the repository are needed to unsubscribe
          * from their changes once they are removed.
          */
@@ -148,14 +156,6 @@ open class JsonFileRepository<K : Comparable<K>, R : ReactiveEntity<K, R>>
             activateEvents(CREATE, UPDATE)
         }
 
-        /**
-         * Shared flow used to trigger serialization of the repository state. Debounced to avoid
-         * excessive serialization operations when multiple changes occur in a short period.
-         */
-        private val serializationTrigger = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-
-        private val serializationDelay = 300.milliseconds
-
         @OptIn(FlowPreview::class)
         private val serializationJob =
             ioScope.launch {
@@ -187,6 +187,8 @@ open class JsonFileRepository<K : Comparable<K>, R : ReactiveEntity<K, R>>
 
         override fun close() {
             runBlocking {
+                // Cancel the channel to prevent new events
+                serializationEventChannel.close()
                 // Ensure any pending serialization is performed
                 performSerialization()
             }

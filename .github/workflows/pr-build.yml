@@ -1,0 +1,67 @@
+name: PR CI build
+
+on:
+    pull_request:
+        branches:
+            - master
+        types: [ opened, synchronize, reopened ]
+        paths-ignore:
+            - "**.md"
+            - '.gitignore'
+            - 'docs/**'
+
+    push:
+        paths-ignore:
+            - "**.md"
+            - '.gitignore'
+            - 'docs/**'
+
+jobs:
+    build-and-test:
+        runs-on: ubuntu-latest
+
+        steps:
+            -   name: Setup timezone
+                run: |
+                    sudo timedatectl set-timezone Europe/Prague
+
+            -   uses: actions/checkout@v4
+                with:
+                    fetch-depth: 0
+
+            -   name: Set up JDK 17
+                uses: actions/setup-java@v4
+                with:
+                    java-version: 17
+                    distribution: 'zulu'
+
+            -   name: Cache SonarQube packages
+                uses: actions/cache@v4
+                with:
+                    path: ~/.sonar/cache
+                    key: ${{ runner.os }}-sonar
+                    restore-keys: ${{ runner.os }}-sonar
+
+            -   name: Cache Gradle packages
+                uses: actions/cache@v4
+                with:
+                    path: |
+                        ~/.gradle/caches
+                        ~/.gradle/wrapper
+                    key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+                    restore-keys: |
+                        ${{ runner.os }}-gradle-
+
+            -   name: Verify Build
+                run: ./gradlew compileKotlin compileTestKotlin test
+
+            -   name: Build with Gradle
+                run: ./gradlew build
+
+            -   name: Upload Artifacts
+                uses: actions/upload-artifact@v4
+                with:
+                    name: pr-build-libs
+                    path: build/libs
+                    retention-days: 14
+                    overwrite: true

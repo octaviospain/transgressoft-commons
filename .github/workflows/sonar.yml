@@ -1,32 +1,13 @@
-name: non-master build
+name: Manual SonarQube Scan
 
 on:
-    pull_request:
-        branches:
-            - master
-        types: [ opened, synchronize, reopened ]
-        paths-ignore:
-            - "**.md"
-            - '.gitignore'
-            - 'docs/**'
-
-    push:
-        branches-ignore:
-            - master
-        paths-ignore:
-            - "**.md"
-            - '.gitignore'
-            - 'docs/**'
+    workflow_dispatch:
 
 jobs:
-    build-and-test:
+    sonar-scan:
         runs-on: ubuntu-latest
 
         steps:
-            -   name: Setup timezone
-                run: |
-                    sudo timedatectl set-timezone Europe/Prague
-
             -   uses: actions/checkout@v4
                 with:
                     fetch-depth: 0
@@ -54,16 +35,10 @@ jobs:
                     restore-keys: |
                         ${{ runner.os }}-gradle-
 
-            -   name: Verify Build
-                run: ./gradlew compileKotlin compileTestKotlin test
-
-            -   name: Build with Gradle
+            -   name: Build
                 run: ./gradlew build
 
-            -   name: Upload Artifacts
-                uses: actions/upload-artifact@v4
-                with:
-                    name: pr-build-libs
-                    path: build/libs
-                    retention-days: 14
-                    overwrite: true
+            -   name: SonarQube Scan
+                env:
+                    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+                run: ./gradlew sonar --info

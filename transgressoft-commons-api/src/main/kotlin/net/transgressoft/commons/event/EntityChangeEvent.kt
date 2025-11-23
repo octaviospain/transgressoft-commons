@@ -31,7 +31,7 @@ import net.transgressoft.commons.entity.IdentifiableEntity
  * @param K the type of the [IdentifiableEntity] objects' id, which must be [Comparable]
  * @param T the type of the [IdentifiableEntity] objects
  */
-interface EntityChangeEvent<K, T : IdentifiableEntity<K>> : CrudEvent<K, T> where K : Comparable<K> {
+interface EntityChangeEvent<K, out T : IdentifiableEntity<K>> : CrudEvent<K, T> where K : Comparable<K> {
 
     val oldEntities: Map<K, T>
 }

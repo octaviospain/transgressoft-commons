@@ -39,7 +39,7 @@ interface TransEventSubscriber<T : TransEntity, ET: EventType, E : TransEvent<ET
     /**
      * Adds an action to be executed when [Flow.Subscriber.onSubscribe] is called.
      *
-     * @param action The action to be executed, providing the [net.transgressoft.commons.TransEventSubscription] as parameter
+     * @param action The action to be executed, providing the [TransEventSubscription] as parameter
      */
     fun addOnSubscribeEventAction(action: Consumer<TransEventSubscription<T, ET, E>>)
 
@@ -47,7 +47,7 @@ interface TransEventSubscriber<T : TransEntity, ET: EventType, E : TransEvent<ET
      * Adds an action to be executed when [Flow.Subscriber.onNext] is called.
      *
      * @param eventTypes The types of events that will trigger the action
-     * @param action The action to be executed, providing the event as parameter
+     * @param action The action to be executed, providing the event as a parameter
      */
     fun addOnNextEventAction(vararg eventTypes: EventType, action: Consumer<E>)
 

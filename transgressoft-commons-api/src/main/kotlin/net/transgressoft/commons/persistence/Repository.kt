@@ -30,7 +30,7 @@ import net.transgressoft.commons.entity.IdentifiableEntity
  * @param K The type of the entity's identifier, which must be [Comparable]
  * @param T The type of entities in the repository, which must implement [IdentifiableEntity]
  */
-interface Repository<K, in T: IdentifiableEntity<K>> : Registry<K, T> where K : Comparable<K> {
+interface Repository<K, T: IdentifiableEntity<K>> : Registry<K, T> where K : Comparable<K> {
     /**
      * Adds the given entity to the repository if it doesn't already exist.
      *

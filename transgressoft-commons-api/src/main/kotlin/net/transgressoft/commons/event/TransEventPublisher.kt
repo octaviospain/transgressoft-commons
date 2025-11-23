@@ -32,7 +32,7 @@ import kotlinx.coroutines.flow.SharedFlow
  * @param ET The specific type of [EventType] associated with this publisher
  * @param E The specific type of [TransEvent] published by this publisher
  */
-interface TransEventPublisher<ET : EventType, E : TransEvent<ET>> : Flow.Publisher<E> {
+interface TransEventPublisher<ET : EventType, out E : TransEvent<ET>> : Flow.Publisher<@UnsafeVariance E> {
 
     /**
      * A flow of entity change events that collectors can observe.
@@ -42,19 +42,19 @@ interface TransEventPublisher<ET : EventType, E : TransEvent<ET>> : Flow.Publish
     /**
      * Publishes an event to all subscribers, asynchronously.
      */
-    fun emitAsync(event: E)
+    fun emitAsync(event: @UnsafeVariance E)
 
-    fun subscribe(action: suspend (E) -> Unit): TransEventSubscription<in TransEntity, ET, E>
+    fun subscribe(action: suspend (E) -> Unit): TransEventSubscription<in TransEntity, ET, @UnsafeVariance E>
 
     /**
      * Legacy compatibility method for Java-style Consumer subscriptions.
      * Consider migrating to the Kotlin Flow-based subscription method instead.
      */
-    fun subscribe(action: Consumer<in E>): TransEventSubscription<in TransEntity, ET, E> = subscribe(action::accept)
+    fun subscribe(action: Consumer<in E>): TransEventSubscription<in TransEntity, ET, @UnsafeVariance E> = subscribe(action::accept)
 
-    fun subscribe(vararg eventTypes: ET, action: suspend (E) -> Unit): TransEventSubscription<in TransEntity, ET, E>
+    fun subscribe(vararg eventTypes: ET, action: suspend (E) -> Unit): TransEventSubscription<in TransEntity, ET, @UnsafeVariance E>
 
-    fun activateEvents(vararg types: ET)
+    fun activateEvents(vararg types: @UnsafeVariance ET)
 
-    fun disableEvents(vararg types: ET)
+    fun disableEvents(vararg types: @UnsafeVariance ET)
 }

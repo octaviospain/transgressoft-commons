@@ -42,5 +42,5 @@ interface TransEvent<T : EventType> {
      * This contains the entities that are relevant to or affected by the event.
      * The specific meaning depends on the concrete event implementation.
      */
-    val entities: Map<*, TransEntity>
+    val entities: Map<out Comparable<*>, TransEntity>
 }

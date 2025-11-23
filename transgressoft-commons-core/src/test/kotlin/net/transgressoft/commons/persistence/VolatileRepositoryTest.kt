@@ -101,7 +101,7 @@ internal class VolatileRepositoryTest : StringSpec({
             repository - entity2 shouldBe true
             repository.isEmpty shouldBe true
 
-            val repository2: Repository<Int, Person> = VolatileRepository<Int, Person>("Repository2")
+            val repository2: Registry<Int, Person> = VolatileRepository("Repository2")
             repository shouldBe repository2
         }
     }
@@ -369,5 +369,21 @@ internal class VolatileRepositoryTest : StringSpec({
 
         // Cancel the UPDATE subscription too
         updateSubscription.cancel()
+    }
+
+    "RegistryBase equals handles null and different types" {
+        repository.equals(null) shouldBe false
+        repository.equals("not a repository") shouldBe false
+        repository.equals(repository) shouldBe true // Same reference
+    }
+
+    "RegistryBase hashCode is consistent with equals" {
+        val repository2 = VolatileRepository<Int, Person>("Repository2")
+        val person = arbitraryPerson(1).next()
+
+        repository.add(person)
+        repository2.add(person)
+
+        repository.hashCode() shouldBe repository2.hashCode()
     }
 })

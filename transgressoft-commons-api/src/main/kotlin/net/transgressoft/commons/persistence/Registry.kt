@@ -27,14 +27,14 @@ import java.util.function.Predicate
 /**
  * A registry represents a read-only collection of entities that can be queried and accessed.
  *
- * The Registry provides a foundation for entity management with query capabilities,
+ * The Registry provides a foundation for entity management with query capabilities
  * but intentionally restricts modification operations. Entities within a Registry
  * are uniquely identified by their ID, allowing for consistent and predictable access.
  *
  * @param K The type of the entity's identifier, which must be [Comparable]
  * @param T The type of entities in the registry, which must implement [IdentifiableEntity]
  */
-interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEvent.Type, CrudEvent<K, @UnsafeVariance T>> where K : Comparable<K> {
+interface Registry<K, T: IdentifiableEntity<K>> : TransEventPublisher<CrudEvent.Type, CrudEvent<K, T>> where K : Comparable<K> {
 
     /**
      * Applies the given action to the entity with the specified ID if present.
@@ -46,7 +46,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param entityAction The action to apply to the entity
      * @return True if the entity was found and the action was applied, false otherwise
      */
-    fun runForSingle(id: K, entityAction: Consumer<@UnsafeVariance T>): Boolean
+    fun runForSingle(id: K, entityAction: Consumer<in T>): Boolean
 
     /**
      * Applies the given action to all entities with the specified IDs if present.
@@ -58,7 +58,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param entityAction The action to apply to the entities
      * @return True if any entity was found and the action was applied, false otherwise
      */
-    fun runForMany(ids: Set<K>, entityAction: Consumer<@UnsafeVariance T>): Boolean
+    fun runForMany(ids: Set<K>, entityAction: Consumer<in T>): Boolean
 
     /**
      * Applies the given action to all entities that match the specified predicate.
@@ -70,7 +70,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param entityAction The action to apply to matching entities
      * @return True if any entity matched and the action was applied, false otherwise
      */
-    fun runMatching(predicate: Predicate<@UnsafeVariance T>, entityAction: Consumer<@UnsafeVariance T>): Boolean
+    fun runMatching(predicate: Predicate<in T>, entityAction: Consumer<in T>): Boolean
 
     /**
      * Applies the given action to all entities in the registry.
@@ -81,7 +81,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param entityAction The action to apply to all entities
      * @return True if the action was applied to any entity, false if the registry is empty
      */
-    fun runForAll(entityAction: Consumer<@UnsafeVariance T>): Boolean
+    fun runForAll(entityAction: Consumer<in T>): Boolean
 
     /**
      * Checks if the registry contains an entity with the specified ID.
@@ -97,7 +97,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param predicate The predicate to match entities against
      * @return True if any entity matches the predicate, false otherwise
      */
-    fun contains(predicate: Predicate<@UnsafeVariance T>): Boolean
+    fun contains(predicate: Predicate<in T>): Boolean
 
     /**
      * Returns all entities that match the specified predicate.
@@ -105,7 +105,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param predicate The predicate to match entities against
      * @return A set of all entities matching the predicate
      */
-    fun search(predicate: Predicate<@UnsafeVariance T>): Set<@UnsafeVariance T>
+    fun search(predicate: Predicate<in T>): Set<T>
 
     /**
      * Returns a limited number of entities that match the specified predicate.
@@ -114,7 +114,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param predicate The predicate to match entities against
      * @return A set of entities matching the predicate, limited to the specified size
      */
-    fun search(size: Int, predicate: Predicate<@UnsafeVariance T>): Set<@UnsafeVariance T>
+    fun search(size: Int, predicate: Predicate<in T>): Set<T>
 
     /**
      * Returns the first entity that matches the specified predicate.
@@ -122,7 +122,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param predicate The predicate to match entities against
      * @return An Optional containing the first matching entity, or empty if none match
      */
-    fun findFirst(predicate: Predicate<@UnsafeVariance T>): Optional<@UnsafeVariance T>
+    fun findFirst(predicate: Predicate<in T>): Optional<out T>
 
     /**
      * Returns the entity with the specified ID if present.
@@ -130,7 +130,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param id The ID of the entity to find
      * @return An Optional containing the entity with the given ID, or empty if not found
      */
-    fun findById(id: K): Optional<@UnsafeVariance T>
+    fun findById(id: K): Optional<out T>
 
     /**
      * Returns the entity with the specified unique identifier if present.
@@ -138,7 +138,7 @@ interface Registry<K, in T: IdentifiableEntity<K>> : TransEventPublisher<CrudEve
      * @param uniqueId The unique identifier of the entity to find
      * @return An Optional containing the entity with the given unique ID, or empty if not found
      */
-    fun findByUniqueId(uniqueId: String): Optional<@UnsafeVariance T>
+    fun findByUniqueId(uniqueId: String): Optional<out T>
 
     /**
      * Returns the number of entities in the registry.

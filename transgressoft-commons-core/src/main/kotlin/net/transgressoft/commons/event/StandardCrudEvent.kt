@@ -28,21 +28,21 @@ import net.transgressoft.commons.entity.IdentifiableEntity
  */
 sealed class StandardCrudEvent {
 
-    data class Create<K, T: IdentifiableEntity<K>>(override val entities: Map<K, T>): CrudEvent<K, T> where K: Comparable<K> {
+    data class Create<K, out T: IdentifiableEntity<K>>(override val entities: Map<K, T>): CrudEvent<K, T> where K: Comparable<K> {
         constructor(entity: T): this(mapOf(entity.id to entity))
         constructor(entities: Collection<T>): this(entities.associateBy { it.id })
 
         override val type: CrudEvent.Type = CrudEvent.Type.CREATE
     }
 
-    data class Read<K, T: IdentifiableEntity<K>>(override val entities: Map<K, T>): CrudEvent<K, T> where K: Comparable<K> {
+    data class Read<K, out T: IdentifiableEntity<K>>(override val entities: Map<K, T>): CrudEvent<K, T> where K: Comparable<K> {
         constructor(entity: T): this(mapOf(entity.id to entity))
         constructor(entities: Collection<T>): this(entities.associateBy { it.id })
 
         override val type: CrudEvent.Type = CrudEvent.Type.READ
     }
 
-    data class Update<K, T: IdentifiableEntity<K>>(override val entities: Map<K, T>, override val oldEntities: Map<K, T>):
+    data class Update<K, out T: IdentifiableEntity<K>>(override val entities: Map<K, T>, override val oldEntities: Map<K, T>):
         EntityChangeEvent<K, T> where K: Comparable<K> {
 
         constructor(entity: T, oldEntity: T): this(mapOf(entity.id to entity), mapOf(oldEntity.id to oldEntity))
@@ -65,7 +65,7 @@ sealed class StandardCrudEvent {
         override val type: CrudEvent.Type = CrudEvent.Type.UPDATE
     }
 
-    data class Delete<K, T: IdentifiableEntity<K>>(override val entities: Map<K, T>): CrudEvent<K, T> where K: Comparable<K> {
+    data class Delete<K, out T: IdentifiableEntity<K>>(override val entities: Map<K, T>): CrudEvent<K, T> where K: Comparable<K> {
         constructor(entity: T): this(mapOf(entity.id to entity))
         constructor(entities: Collection<T>): this(entities.associateBy { it.id })
 

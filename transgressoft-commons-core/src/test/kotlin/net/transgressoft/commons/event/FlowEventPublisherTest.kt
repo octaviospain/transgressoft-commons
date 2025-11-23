@@ -24,9 +24,11 @@ import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
 import net.transgressoft.commons.event.StandardCrudEvent.Create
 import net.transgressoft.commons.event.StandardCrudEvent.Delete
 import net.transgressoft.commons.event.StandardCrudEvent.Update
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import java.util.UUID
 import java.util.concurrent.Flow
@@ -402,7 +404,7 @@ class FlowEventPublisherTest : StringSpec({
                 if (event.isCreate()) {
                     val entity = event.entities.values.first()
                     val updatedEntity = entity.clone()
-                    publisher.emitAsync(StandardCrudEvent.Update(updatedEntity, entity))
+                    publisher.emitAsync(Update(updatedEntity, entity))
                 }
             }
 
@@ -495,6 +497,32 @@ class FlowEventPublisherTest : StringSpec({
 
         // Should not have received event after cancellation
         receivedEvents.size shouldBe 1
+    }
+
+    "StandardCrudEvent Update requires consistent entity collections" {
+        val entity1 = TestEntity("entity-1")
+        val entity2 = TestEntity("entity-2")
+        val oldEntity1 = entity1.clone()
+
+        // Valid update - same keys and size
+        val validUpdate = Update(entity1, oldEntity1)
+        validUpdate.entities.size shouldBe 1
+        validUpdate.oldEntities.size shouldBe 1
+
+        // Valid update with multiple entities
+        val oldEntity2 = entity2.clone()
+        val validMultiUpdate: EntityChangeEvent<String, TestEntity> = Update(listOf(entity1, entity2), listOf(oldEntity1, oldEntity2))
+        validMultiUpdate.entities.size shouldBe 2
+
+        // Invalid update - different sizes
+        shouldThrow<IllegalArgumentException> {
+            Update(mapOf(entity1.id to entity1), mapOf(oldEntity1.id to oldEntity1, entity2.id to oldEntity2))
+        }.message shouldContain "consistent"
+
+        // Invalid update - different keys
+        shouldThrow<IllegalArgumentException> {
+            Update(mapOf(entity1.id to entity1), mapOf(entity2.id to oldEntity2))
+        }.message shouldContain "consistent"
     }
 })
 

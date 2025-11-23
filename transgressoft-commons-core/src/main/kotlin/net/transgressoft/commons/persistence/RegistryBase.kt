@@ -59,13 +59,13 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
 
     init {
         // A registry can't create or delete entities,
-        // so the CREATE and DELETE events are disabled by default
+        // so the CREATE and DELETE events are disabled by default.
         // READ is disabled also because its use case is not clear yet
         activateEvents(UPDATE)
     }
 
     @Suppress("UNCHECKED_CAST")
-    override fun runForSingle(id: K, entityAction: Consumer<T>): Boolean {
+    override fun runForSingle(id: K, entityAction: Consumer<in T>): Boolean {
         val entity = entitiesById[id] ?: return false
         val previousHashcode = entity.hashCode()
         val entityBeforeUpdate = entity.clone() as T
@@ -80,7 +80,7 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
         return false
     }
 
-    override fun runForMany(ids: Set<K>, entityAction: Consumer<T>): Boolean =
+    override fun runForMany(ids: Set<K>, entityAction: Consumer<in T>): Boolean =
         ids.mapNotNull { entitiesById[it] }.let {
             if (it.isNotEmpty()) {
                 runActionAndReplaceModifiedEntities(it.toSet(), entityAction)
@@ -90,7 +90,7 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
         }
 
     @Suppress("UNCHECKED_CAST")
-    private fun runActionAndReplaceModifiedEntities(entities: Set<T>, entityAction: Consumer<T>): Boolean {
+    private fun runActionAndReplaceModifiedEntities(entities: Set<T>, entityAction: Consumer<in T>): Boolean {
         val updates =
             entities.mapNotNull { entity ->
                 val previousHashCode = entity.hashCode()
@@ -119,7 +119,7 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
         return false
     }
 
-    override fun runMatching(predicate: Predicate<T>, entityAction: Consumer<T>): Boolean =
+    override fun runMatching(predicate: Predicate<in T>, entityAction: Consumer<in T>): Boolean =
         search(predicate).let {
             if (it.isNotEmpty()) {
                 runActionAndReplaceModifiedEntities(it, entityAction)
@@ -128,43 +128,43 @@ abstract class RegistryBase<K, T : IdentifiableEntity<K>>(
             }
         }
 
-    override fun runForAll(entityAction: Consumer<T>) = runActionAndReplaceModifiedEntities(entitiesById.values.toSet(), entityAction)
+    override fun runForAll(entityAction: Consumer<in T>) = runActionAndReplaceModifiedEntities(entitiesById.values.toSet(), entityAction)
 
     override fun contains(id: K) = entitiesById.containsKey(id)
 
-    override fun contains(predicate: Predicate<T>): Boolean =
+    override fun contains(predicate: Predicate<in T>): Boolean =
         entitiesById.values.stream()
             .filter { predicate.test(it) }
             .findAny().isPresent
 
-    override fun search(predicate: Predicate<T>): Set<T> =
+    override fun search(predicate: Predicate<in T>): Set<T> =
         entitiesById.values.stream()
             .filter { predicate.test(it) }
             .collect(Collectors.toSet())
             .also { publisher.emitAsync(Read(it)) }
 
-    override fun search(size: Int, predicate: Predicate<T>): Set<T> =
+    override fun search(size: Int, predicate: Predicate<in T>): Set<T> =
         entitiesById.values.asSequence()
             .filter { predicate.test(it) }
             .take(size)
             .toSet()
             .also { publisher.emitAsync(Read(it)) }
 
-    override fun findFirst(predicate: Predicate<T>): Optional<T> =
+    override fun findFirst(predicate: Predicate<in T>): Optional<out T> =
         Optional.ofNullable(entitiesById.values.firstOrNull { predicate.test(it) })
             .also {
                 if (it.isPresent)
                     publisher.emitAsync(Read(it.get()))
             }
 
-    override fun findById(id: K): Optional<T> =
+    override fun findById(id: K): Optional<out T> =
         Optional.ofNullable(entitiesById[id])
             .also {
                 if (it.isPresent)
                     publisher.emitAsync(Read(it.get()))
             }
 
-    override fun findByUniqueId(uniqueId: String): Optional<T> =
+    override fun findByUniqueId(uniqueId: String): Optional<out T> =
         entitiesById.values.stream()
             .filter { it.uniqueId == uniqueId }
             .findAny()

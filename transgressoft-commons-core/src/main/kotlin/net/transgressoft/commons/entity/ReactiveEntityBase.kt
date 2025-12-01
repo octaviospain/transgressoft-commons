@@ -107,4 +107,20 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
             publisher.emitAsync(Update(this, entityBeforeChange) as EntityChangeEvent<K, R>)
         }
     }
+
+    @Suppress("UNCHECKED_CAST")
+    protected fun mutateAndPublish(mutationAction: Runnable) {
+        val entityBeforeChange = clone()
+        mutationAction.run()
+        if (entityBeforeChange == this) {
+            log.warn {
+                "Attempt to publish update event from a mutation when object comparison was false. " +
+                    "Consider implementing equals() and hashcode() that implies a mutation in instance variables affected by the mutationAction"
+            }
+        } else {
+            lastDateModified = LocalDateTime.now()
+            log.trace { "Firing entity update event from $entityBeforeChange to $this" }
+            publisher.emitAsync(Update(this, entityBeforeChange) as EntityChangeEvent<K, R>)
+        }
+    }
 }

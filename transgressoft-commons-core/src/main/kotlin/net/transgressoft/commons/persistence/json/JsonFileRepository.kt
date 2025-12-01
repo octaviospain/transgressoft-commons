@@ -18,10 +18,9 @@
 package net.transgressoft.commons.persistence.json
 
 import net.transgressoft.commons.entity.ReactiveEntity
-import net.transgressoft.commons.event.CrudEvent
 import net.transgressoft.commons.event.CrudEvent.Type.CREATE
 import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
-import net.transgressoft.commons.event.EntityChangeEvent
+import net.transgressoft.commons.event.MutationEvent
 import net.transgressoft.commons.event.ReactiveScope
 import net.transgressoft.commons.event.TransEventSubscription
 import net.transgressoft.commons.persistence.Repository
@@ -119,7 +118,7 @@ open class JsonFileRepository<K : Comparable<K>, R : ReactiveEntity<K, R>>
          * Subscriptions map for each entity in the repository are needed to unsubscribe
          * from their changes once they are removed.
          */
-        private val subscriptionsMap: MutableMap<K, TransEventSubscription<in R, CrudEvent.Type, EntityChangeEvent<K, R>>> = ConcurrentHashMap()
+        private val subscriptionsMap: MutableMap<K, TransEventSubscription<in R, MutationEvent.Type, MutationEvent<K, R>>> = ConcurrentHashMap()
 
         init {
             require(jsonFile.exists().and(jsonFile.canWrite()).and(jsonFile.extension == "json")) {

@@ -1,17 +1,14 @@
 package net.transgressoft.commons.persistence.json.primitives
 
-import net.transgressoft.commons.event.CrudEvent
-import net.transgressoft.commons.event.CrudEvent.Type.CREATE
 import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
-import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.EventType
+import net.transgressoft.commons.event.MutationEvent
 import net.transgressoft.commons.event.TransEventSubscriberBase
 import net.transgressoft.commons.event.TransEventSubscription
 import net.transgressoft.commons.persistence.ReactivePrimitive
 import io.kotest.assertions.assertSoftly
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.collections.shouldContainOnly
 import io.kotest.matchers.date.shouldBeAfter
 import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.matchers.shouldBe
@@ -19,12 +16,12 @@ import io.kotest.matchers.shouldNotBe
 import kotlin.time.Duration.Companion.milliseconds
 
 private class ReactiveStringSubscriber :
-    TransEventSubscriberBase<ReactivePrimitive<String>, CrudEvent.Type, CrudEvent<String, ReactivePrimitive<String>>>("subscriber") {
-    var subscriptionReceived: TransEventSubscription<ReactivePrimitive<String>, CrudEvent.Type, CrudEvent<String, ReactivePrimitive<String>>>? = null
-    val receivedEvents = mutableMapOf<EventType, CrudEvent<String, ReactivePrimitive<String>>>()
+    TransEventSubscriberBase<ReactivePrimitive<String>, MutationEvent.Type, MutationEvent<String, ReactivePrimitive<String>>>("subscriber") {
+    var subscriptionReceived: TransEventSubscription<ReactivePrimitive<String>, MutationEvent.Type, MutationEvent<String, ReactivePrimitive<String>>>? = null
+    val receivedEvents = mutableMapOf<EventType, MutationEvent<String, ReactivePrimitive<String>>>()
 
     init {
-        addOnNextEventAction(CREATE, UPDATE) { event ->
+        addOnNextEventAction(MutationEvent.Type.MUTATE) { event ->
             receivedEvents[event.type] = event
         }
 
@@ -40,7 +37,7 @@ class ReactiveStringTest : StringSpec({
 
         reactiveString.subscribe(subscriber)
 
-        val oldClone = reactiveString.clone()
+        val oldClone = ReactiveString("1", "initialValue")
         val lastDateModified = reactiveString.lastDateModified
 
         reactiveString.value = "new value"
@@ -53,9 +50,8 @@ class ReactiveStringTest : StringSpec({
 
             assertSoftly(subscriber.receivedEvents[UPDATE]) {
                 it?.let {
-                    this as EntityChangeEvent<String, ReactivePrimitive<String>>
-                    this.entities.values.shouldContainOnly(reactiveString)
-                    this.oldEntities.values.shouldContainOnly(oldClone)
+                    this?.newEntity shouldBe reactiveString
+                    this?.oldEntity shouldBe oldClone
                 }
             }
         }

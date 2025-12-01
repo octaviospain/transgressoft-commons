@@ -17,8 +17,6 @@
 
 package net.transgressoft.commons.event
 
-import net.transgressoft.commons.entity.TransEntity
-
 /**
  * An event that can be published and subscribed to within the reactive event system.
  *
@@ -26,7 +24,7 @@ import net.transgressoft.commons.entity.TransEntity
  * a common interface that all specific event types must implement. This facilitates
  * a consistent approach to event handling, publishing, and subscription.
  */
-interface TransEvent<T : EventType> {
+interface TransEvent<out T : EventType> {
 
     /**
      * The type of this event, used to categorize and filter events.
@@ -35,12 +33,4 @@ interface TransEvent<T : EventType> {
      * interested in, based on the event's category.
      */
     val type: T
-
-    /**
-     * A map of entities associated with this event, keyed by their identifiers.
-     *
-     * This contains the entities that are relevant to or affected by the event.
-     * The specific meaning depends on the concrete event implementation.
-     */
-    val entities: Map<out Comparable<*>, TransEntity>
 }

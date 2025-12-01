@@ -42,7 +42,18 @@ interface CrudEvent<K, out T: IdentifiableEntity<K>>: TransEvent<CrudEvent.Type>
         override fun toString() = "StandardDataEvent($name, $code)"
     }
 
-    override val entities: Map<K, T>
+    /**
+     * A map of entities associated with this event, keyed by their identifiers.
+     *
+     * This contains the entities that are relevant to or affected by the event.
+     * The specific meaning depends on the concrete event implementation.
+     */
+    val entities: Map<K, T>
+
+    /**
+     * Map of the entities before they were modified. Not empty only when the event is of type UPDATE
+     */
+    val oldEntities: Map<K, T>
 
     fun isCreate() = type == Type.CREATE
 

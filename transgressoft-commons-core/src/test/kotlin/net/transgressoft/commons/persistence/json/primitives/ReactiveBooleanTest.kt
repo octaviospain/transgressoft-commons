@@ -1,17 +1,15 @@
 package net.transgressoft.commons.persistence.json.primitives
 
-import net.transgressoft.commons.event.CrudEvent
 import net.transgressoft.commons.event.CrudEvent.Type.CREATE
 import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
-import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.EventType
+import net.transgressoft.commons.event.MutationEvent
 import net.transgressoft.commons.event.TransEventSubscriberBase
 import net.transgressoft.commons.event.TransEventSubscription
 import net.transgressoft.commons.persistence.ReactivePrimitive
 import io.kotest.assertions.assertSoftly
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.collections.shouldContainOnly
 import io.kotest.matchers.date.shouldBeAfter
 import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -21,9 +19,9 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
 
 private class ReactiveBooleanSubscriber :
-    TransEventSubscriberBase<ReactivePrimitive<Boolean>, CrudEvent.Type, CrudEvent<String, ReactivePrimitive<Boolean>>>("subscriber") {
-    var subscriptionReceived: TransEventSubscription<ReactivePrimitive<Boolean>, CrudEvent.Type, CrudEvent<String, ReactivePrimitive<Boolean>>>? = null
-    val receivedEvents = mutableMapOf<EventType, CrudEvent<String, ReactivePrimitive<Boolean>>>()
+    TransEventSubscriberBase<ReactivePrimitive<Boolean>, MutationEvent.Type, MutationEvent<String, ReactivePrimitive<Boolean>>>("subscriber") {
+    var subscriptionReceived: TransEventSubscription<ReactivePrimitive<Boolean>, MutationEvent.Type, MutationEvent<String, ReactivePrimitive<Boolean>>>? = null
+    val receivedEvents = mutableMapOf<EventType, MutationEvent<String, ReactivePrimitive<Boolean>>>()
 
     init {
         addOnNextEventAction(CREATE, UPDATE) { event ->
@@ -56,9 +54,8 @@ class ReactiveBooleanTest : StringSpec({
 
             assertSoftly(subscriber.receivedEvents[UPDATE]) {
                 it?.let {
-                    this as EntityChangeEvent<String, ReactivePrimitive<Boolean>>
-                    this.entities.values.shouldContainOnly(reactiveBoolean)
-                    this.oldEntities.values.shouldContainOnly(oldClone)
+                    this?.newEntity shouldBe reactiveBoolean
+                    this?.oldEntity shouldBe oldClone
                 }
             }
         }

@@ -8,7 +8,6 @@ import net.transgressoft.commons.event.CrudEvent.Type.CREATE
 import net.transgressoft.commons.event.CrudEvent.Type.DELETE
 import net.transgressoft.commons.event.CrudEvent.Type.READ
 import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
-import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.EventType
 import net.transgressoft.commons.event.ReactiveScope
 import net.transgressoft.commons.event.TransEventSubscriberBase
@@ -117,9 +116,8 @@ internal class VolatileRepositoryTest : StringSpec({
 
         assertSoftly(subscriber.receivedEvents[UPDATE]) {
             it?.let {
-                this as EntityChangeEvent<Int, Person>
-                this.entities.values.shouldContainOnly(person)
-                this.oldEntities.values.shouldContainOnly(person.copy(money = previousMoney))
+                this?.entities?.values?.shouldContainOnly(person)
+                this?.oldEntities?.values?.shouldContainOnly(person.copy(money = previousMoney))
             }
         }
 
@@ -133,9 +131,8 @@ internal class VolatileRepositoryTest : StringSpec({
 
         assertSoftly(subscriber.receivedEvents[UPDATE]) {
             it?.let {
-                this as EntityChangeEvent<Int, Person>
-                this.entities.values shouldContainAll set
-                this.oldEntities.values.shouldContainAll(set.map { it.copy(money = previousSetMoney[it.id]) })
+                this?.entities?.values?.shouldContainAll(set)
+                this?.oldEntities?.values?.shouldContainAll(set.map { it.copy(money = previousSetMoney[it.id]) })
             }
         }
 
@@ -153,9 +150,8 @@ internal class VolatileRepositoryTest : StringSpec({
 
         assertSoftly(subscriber.receivedEvents[UPDATE]) {
             it?.let {
-                this as EntityChangeEvent<Int, Person>
-                this.entities.values.shouldContainOnly(poorPerson)
-                this.oldEntities.values.shouldContainOnly(poorPerson.copy(money = 0))
+                this?.entities?.values.shouldContainOnly(poorPerson)
+                this?.oldEntities?.values.shouldContainOnly(poorPerson.copy(money = 0))
             }
         }
     }
@@ -204,10 +200,9 @@ internal class VolatileRepositoryTest : StringSpec({
 
         assertSoftly(subscriber.receivedEvents[UPDATE]) {
             this?.isUpdate() shouldBe true
-            this as EntityChangeEvent<Int, Person>
-            this.entities.values.shouldContainOnly(entityModified)
-            this.oldEntities.values.shouldContainOnly(person)
-            this.oldEntities[person.id] shouldBe person
+            this?.entities?.values.shouldContainOnly(entityModified)
+            this?.oldEntities?.values.shouldContainOnly(person)
+            this?.oldEntities[person.id] shouldBe person
         }
         subscriber.createEventEntities.get() shouldBe 4
         subscriber.deletedEventEntities.get() shouldBe 2

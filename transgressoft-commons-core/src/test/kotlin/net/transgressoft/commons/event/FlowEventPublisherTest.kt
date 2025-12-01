@@ -59,7 +59,7 @@ class FlowEventPublisherTest : StringSpec({
 
     "ReactiveEntity emits change event on property modification" {
         val entity = TestEntity(UUID.randomUUID().toString())
-        val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
+        val receivedEvents = mutableListOf<MutationEvent<String, TestEntity>>()
 
         val subscription =
             entity.subscribe { event ->
@@ -74,16 +74,16 @@ class FlowEventPublisherTest : StringSpec({
 
         receivedEvents.size shouldBe 1
         val event = receivedEvents[0]
-        event.shouldBeInstanceOf<EntityChangeEvent<String, TestEntity>>()
-        event.entities[entity.id]?.name shouldBe newName
-        event.oldEntities[entity.id]?.name shouldBe oldName
+        event.shouldBeInstanceOf<MutationEvent<String, TestEntity>>()
+        event.newEntity.name shouldBe newName
+        event.oldEntity.name shouldBe oldName
 
         subscription.cancel()
     }
 
     "ReactiveEntity emits change event when mutating a non public instance variable via method" {
         val entity = TestEntity(UUID.randomUUID().toString())
-        val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
+        val receivedEvents = mutableListOf<MutationEvent<String, TestEntity>>()
 
         entity.subscribe { event ->
             receivedEvents.add(event)
@@ -95,13 +95,13 @@ class FlowEventPublisherTest : StringSpec({
 
         receivedEvents.size shouldBe 1
         val event = receivedEvents[0]
-        event.entities[entity.id]?.getAddress("John") shouldBe "Apple avenue"
-        event.oldEntities[entity.id]?.getAddress("John") shouldBe null
+        event.newEntity.getAddress("John") shouldBe "Apple avenue"
+        event.oldEntity.getAddress("John") shouldBe null
     }
 
     "ReactiveEntity does not emit change event when mutating an incorrectly managed property via method" {
         val entity = TestEntity(UUID.randomUUID().toString())
-        val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
+        val receivedEvents = mutableListOf<MutationEvent<String, TestEntity>>()
 
         entity.subscribe { event ->
             receivedEvents.add(event)
@@ -116,7 +116,7 @@ class FlowEventPublisherTest : StringSpec({
 
     "ReactiveEntity does not emit change event when property is set to its current value" {
         val entity = TestEntity(UUID.randomUUID().toString())
-        val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
+        val receivedEvents = mutableListOf<MutationEvent<String, TestEntity>>()
 
         val subscription =
             entity.subscribe { event ->
@@ -192,12 +192,12 @@ class FlowEventPublisherTest : StringSpec({
         val counter = AtomicInteger(0)
 
         val subscriber =
-            object : Flow.Subscriber<EntityChangeEvent<String, TestEntity>> {
+            object : Flow.Subscriber<MutationEvent<String, TestEntity>> {
                 override fun onSubscribe(subscription: Flow.Subscription) {
                     // In a real subscriber, you'd maybe call subscription.request(Long.MAX_VALUE) here, although in this library doesn't make sense
                 }
 
-                override fun onNext(item: EntityChangeEvent<String, TestEntity>) {
+                override fun onNext(item: MutationEvent<String, TestEntity>) {
                     counter.incrementAndGet()
                 }
 
@@ -255,8 +255,9 @@ class FlowEventPublisherTest : StringSpec({
                 }
             }
 
-        val originalEntity = TestEntity(UUID.randomUUID().toString())
-        val updatedEntity = originalEntity.clone()
+        val uuid = UUID.randomUUID().toString()
+        val originalEntity = TestEntity(uuid)
+        val updatedEntity = TestEntity(uuid)
         updatedEntity.name = "Updated Name"
 
         publisher.emitAsync(Update(updatedEntity, originalEntity))
@@ -266,7 +267,7 @@ class FlowEventPublisherTest : StringSpec({
         receivedEvents.size shouldBe 1
         val event = receivedEvents[0]
         event.entities.shouldContainExactly(mapOf(updatedEntity.id to updatedEntity))
-        (event as EntityChangeEvent<String, TestEntity>).oldEntities.shouldContainExactly(mapOf(originalEntity.id to originalEntity))
+        event.oldEntities.shouldContainExactly(mapOf(originalEntity.id to originalEntity))
 
         subscription.cancel()
     }
@@ -310,8 +311,9 @@ class FlowEventPublisherTest : StringSpec({
         val entity = TestEntity(UUID.randomUUID().toString())
         publisher.emitAsync(Create(entity))
 
-        val originalEntity = TestEntity(UUID.randomUUID().toString())
-        val updatedEntity = originalEntity.clone()
+        val uuid = UUID.randomUUID().toString()
+        val originalEntity = TestEntity(uuid)
+        val updatedEntity = TestEntity(uuid)
         updatedEntity.name = "Updated Name"
         publisher.emitAsync(Update(updatedEntity, originalEntity))
 
@@ -328,8 +330,8 @@ class FlowEventPublisherTest : StringSpec({
         val entity = TestEntity(UUID.randomUUID().toString())
         testScope.launch {
             val event = entity.changes.first()
-            event.shouldBeInstanceOf<EntityChangeEvent<String, TestEntity>>()
-            event.entities[entity.id]?.name shouldBe "Collected via Flow"
+            event.shouldBeInstanceOf<MutationEvent<String, TestEntity>>()
+            event.newEntity.name shouldBe "Collected via Flow"
         }
 
         entity.name = "Collected via Flow"
@@ -338,7 +340,7 @@ class FlowEventPublisherTest : StringSpec({
 
     "ReactiveEntity change event includes a deep clone of the old entity" {
         val entity = TestEntity(UUID.randomUUID().toString())
-        val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
+        val receivedEvents = mutableListOf<MutationEvent<String, TestEntity>>()
 
         val subscription =
             entity.subscribe { event ->
@@ -354,12 +356,11 @@ class FlowEventPublisherTest : StringSpec({
         val event = receivedEvents[0]
 
         // Verify the old entity is a proper clone
-        val oldEntity = event.oldEntities[entity.id]!!
-        oldEntity.name shouldBe originalName
-        oldEntity.id shouldBe entity.id
+        event.oldEntity.name shouldBe originalName
+        event.newEntity.id shouldBe entity.id
 
         // Verify it's a different instance
-        (oldEntity !== entity) shouldBe true
+        (event.oldEntity !== entity) shouldBe true
 
         subscription.cancel()
     }
@@ -436,7 +437,7 @@ class FlowEventPublisherTest : StringSpec({
                 // Emit a follow-up event during processing (simulating cascading updates)
                 if (event.isCreate()) {
                     val entity = event.entities.values.first()
-                    val updatedEntity = entity.clone()
+                    val updatedEntity = TestEntity(entity.id).apply { }
                     publisher.emitAsync(Update(updatedEntity, entity))
                 }
             }
@@ -535,7 +536,7 @@ class FlowEventPublisherTest : StringSpec({
     "StandardCrudEvent Update requires consistent entity collections" {
         val entity1 = TestEntity("entity-1")
         val entity2 = TestEntity("entity-2")
-        val oldEntity1 = entity1.clone()
+        val oldEntity1 = TestEntity("entity-1")
 
         // Valid update - same keys and size
         val validUpdate = Update(entity1, oldEntity1)
@@ -543,8 +544,8 @@ class FlowEventPublisherTest : StringSpec({
         validUpdate.oldEntities.size shouldBe 1
 
         // Valid update with multiple entities
-        val oldEntity2 = entity2.clone()
-        val validMultiUpdate: EntityChangeEvent<String, TestEntity> = Update(listOf(entity1, entity2), listOf(oldEntity1, oldEntity2))
+        val oldEntity2 = TestEntity("entity-2")
+        val validMultiUpdate: CrudEvent<String, TestEntity> = Update(listOf(entity1, entity2), listOf(oldEntity1, oldEntity2))
         validMultiUpdate.entities.size shouldBe 2
 
         // Invalid update - different sizes

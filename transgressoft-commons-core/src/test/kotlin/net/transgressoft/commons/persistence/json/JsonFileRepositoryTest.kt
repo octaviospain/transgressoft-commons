@@ -12,7 +12,6 @@ import net.transgressoft.commons.event.ReactiveScope
 import net.transgressoft.commons.event.TransEventSubscription
 import io.kotest.assertions.json.shouldEqualJson
 import io.kotest.assertions.json.shouldNotEqualJson
-import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -31,7 +30,6 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.forEach
 import kotlin.random.Random
-import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -393,12 +391,10 @@ class JsonFileRepositoryTest: StringSpec({
         testDispatcher.scheduler.advanceUntilIdle()
 
         // All entities in the events match original entities
-        eventually(500.milliseconds) {
-            val createdEntityIds = events.flatMap { it.entities.keys }
-            createdEntityIds shouldContainAll testPeople.map { it.id }
+        val createdEntityIds = events.flatMap { it.entities.keys }
+        createdEntityIds shouldContainAll testPeople.map { it.id }
 
-            subscription.source.changes shouldBe repository.changes
-        }
+        subscription.source.changes shouldBe repository.changes
 
         PersonJsonFileRepository(jsonFile).size() shouldBe repository.size()
     }
@@ -651,20 +647,16 @@ class JsonFileRepositoryTest: StringSpec({
             repository.runForSingle(person.id) { (it as Person).money = it.money?.plus(1) } shouldBe true
         }
 
-        eventually(500.milliseconds) {
-            person.money shouldBe initialMoney + 100
-        }
+        person.money shouldBe initialMoney + 100
 
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Allow a debounced period to complete
-        eventually(500.milliseconds) {
-            val reloaded = PersonJsonFileRepository(jsonFile)
-            testDispatcher.scheduler.advanceUntilIdle()
+        val reloaded = PersonJsonFileRepository(jsonFile)
+        testDispatcher.scheduler.advanceUntilIdle()
 
-            reloaded.findById(person.id).get().money shouldBe person.money
-            reloaded.close()
-        }
+        reloaded.findById(person.id).get().money shouldBe person.money
+        reloaded.close()
 
         repository.close()
     }

@@ -73,7 +73,7 @@ sealed class PersonEventType {
         BORN(201)
     }
 
-    private data class Born<T: Personly>(val genre: Boolean, override val entities: Map<Int, Personly>): TransEvent<Type> {
+    private data class Born<T: Personly>(val genre: Boolean): TransEvent<Type> {
 
         override val type: PersonEventType.Type = Type.BORN
     }

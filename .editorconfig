@@ -107,7 +107,6 @@ ij_kotlin_while_on_new_line = false
 ij_kotlin_wrap_elvis_expressions = 1
 ij_kotlin_wrap_expression_body_functions = 1
 ij_kotlin_wrap_first_method_in_call_chain = false
-ij_kotlin_wrap_multiline_annotation = false
 ktlint_standard_wrapping = enabled
 ktlint_standard_function-signature = disabled
 ktlint_standard_multiline-if-else = disabled

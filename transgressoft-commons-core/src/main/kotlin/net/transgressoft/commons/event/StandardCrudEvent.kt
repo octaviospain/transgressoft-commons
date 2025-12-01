@@ -32,6 +32,7 @@ sealed class StandardCrudEvent {
         constructor(entity: T): this(mapOf(entity.id to entity))
         constructor(entities: Collection<T>): this(entities.associateBy { it.id })
 
+        override val oldEntities: Map<K, T> = emptyMap()
         override val type: CrudEvent.Type = CrudEvent.Type.CREATE
     }
 
@@ -39,11 +40,12 @@ sealed class StandardCrudEvent {
         constructor(entity: T): this(mapOf(entity.id to entity))
         constructor(entities: Collection<T>): this(entities.associateBy { it.id })
 
+        override val oldEntities: Map<K, T> = emptyMap()
         override val type: CrudEvent.Type = CrudEvent.Type.READ
     }
 
-    data class Update<K, out T: IdentifiableEntity<K>>(override val entities: Map<K, T>, override val oldEntities: Map<K, T>):
-        EntityChangeEvent<K, T> where K: Comparable<K> {
+    data class Update<K, out T: IdentifiableEntity<K>>(override val entities: Map<K, T>, override val oldEntities: Map<K, T>)
+    : CrudEvent<K, T> where K: Comparable<K> {
 
         constructor(entity: T, oldEntity: T): this(mapOf(entity.id to entity), mapOf(oldEntity.id to oldEntity))
 
@@ -69,6 +71,7 @@ sealed class StandardCrudEvent {
         constructor(entity: T): this(mapOf(entity.id to entity))
         constructor(entities: Collection<T>): this(entities.associateBy { it.id })
 
+        override val oldEntities: Map<K, T> = emptyMap()
         override val type: CrudEvent.Type = CrudEvent.Type.DELETE
     }
 }

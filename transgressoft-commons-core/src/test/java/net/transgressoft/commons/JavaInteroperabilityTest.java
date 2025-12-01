@@ -20,8 +20,6 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -73,8 +71,8 @@ class JavaInteroperabilityTest {
         
         // Subscribe to changes using a Java Consumer
         var subscription = appName.subscribe(event -> {
-            oldValueHolder[0] = event.getOldEntities().values().iterator().next().getValue();
-            newValueHolder[0] = event.getEntities().values().iterator().next().getValue();
+            oldValueHolder[0] = event.getOldEntity().getValue();
+            newValueHolder[0] = event.getNewEntity().getValue();
         });
 
         // When value changes, subscriber action is triggered
@@ -84,11 +82,9 @@ class JavaInteroperabilityTest {
         scheduler.advanceUntilIdle();
 
         // Verify
-        await().atMost(3, SECONDS).untilAsserted(() -> {
             assertEquals("MyApp", oldValueHolder[0]);
             assertEquals("NewAppName", newValueHolder[0]);
             assertEquals("NewAppName", appName.getValue());
-        });
 
         subscription.cancel();
     }
@@ -112,9 +108,9 @@ class JavaInteroperabilityTest {
 
         var subscription = person.subscribe(
             event -> {
-                var newPerson = event.getEntities().values().iterator().next();
+                var newPerson = event.getNewEntity();
                 newName[0] = newPerson.getName();
-                var oldPerson = event.getOldEntities().values().iterator().next();
+                var oldPerson = event.getOldEntity();
                 oldName[0] = oldPerson.getName();
             }
         );
@@ -126,10 +122,8 @@ class JavaInteroperabilityTest {
         scheduler.advanceUntilIdle();
 
         // Wait for notification and verify
-        await().atMost(3, SECONDS).untilAsserted(() -> {
             assertEquals("Alice", oldName[0]);
             assertEquals("John", newName[0]);
-        });
 
         subscription.cancel();
     }
@@ -155,10 +149,8 @@ class JavaInteroperabilityTest {
         scheduler.advanceUntilIdle();
 
         // Wait for notification and verify
-        await().atMost(3, SECONDS).untilAsserted(() -> {
             assertEquals(1, eventEntities.size());
             assertEquals("Alice", eventEntities.get(0).getName());
-        });
 
         eventEntities.clear();
 
@@ -169,8 +161,7 @@ class JavaInteroperabilityTest {
         scheduler.advanceUntilIdle();
 
         // Wait for notification and verify
-        await().atMost(3, SECONDS).untilAsserted(() ->
-                assertEquals("John", eventEntities.get(0).getName()));
+                assertEquals("John", eventEntities.get(0).getName());
 
         // Check the repository directly
         var storedPerson = repository.findById(1).get();
@@ -208,11 +199,9 @@ class JavaInteroperabilityTest {
         scheduler.advanceUntilIdle();
 
         // Verify changes
-        await().atMost(3, SECONDS).untilAsserted(() -> {
             assertEquals("BackupServer", serverName.getValue());
             assertEquals(150, maxConnections.getValue());
             assertTrue(debugMode.getValue());
-        });
 
         configRepository.close();
 
@@ -223,11 +212,9 @@ class JavaInteroperabilityTest {
         scheduler.advanceUntilIdle();
         
         // Check that values were persisted
-        await().atMost(3, SECONDS).untilAsserted(() -> {
             assertEquals("BackupServer", reloadedRepo.findById("server.name").get().getValue());
             assertEquals(150, reloadedRepo.findById("max.connections").get().getValue());
             assertEquals(Boolean.TRUE, reloadedRepo.findById("debug.mode").get().getValue());
-        });
 
         reloadedRepo.close();
         configFile.deleteOnExit();

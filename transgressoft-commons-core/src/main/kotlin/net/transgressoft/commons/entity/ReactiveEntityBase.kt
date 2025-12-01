@@ -17,11 +17,10 @@
 
 package net.transgressoft.commons.entity
 
-import net.transgressoft.commons.event.CrudEvent
-import net.transgressoft.commons.event.CrudEvent.Type.UPDATE
-import net.transgressoft.commons.event.EntityChangeEvent
 import net.transgressoft.commons.event.FlowEventPublisher
-import net.transgressoft.commons.event.StandardCrudEvent.Update
+import net.transgressoft.commons.event.MutationEvent
+import net.transgressoft.commons.event.MutationEvent.Type.MUTATE
+import net.transgressoft.commons.event.ReactiveMutationEvent
 import net.transgressoft.commons.event.TransEventPublisher
 import net.transgressoft.commons.event.TransEventSubscription
 import mu.KotlinLogging
@@ -42,19 +41,19 @@ import kotlinx.coroutines.flow.SharedFlow
  * @param R The concrete type of the reactive entity that extends this class
  *
  * @see ReactiveEntity
- * @see EntityChangeEvent
+ * @see MutationEvent
  */
 abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
-    private val publisher: TransEventPublisher<CrudEvent.Type, EntityChangeEvent<K, R>>
+    private val publisher: TransEventPublisher<MutationEvent.Type, MutationEvent<K, R>>
 ) : ReactiveEntity<K, R> where K : Comparable<K> {
     private val log = KotlinLogging.logger {}
 
     protected constructor() : this(FlowEventPublisher("ReactiveEntity"))
 
     init {
-        // A reactive entity only emits UPDATE events because it
+        // A reactive entity only emits MUTATE events because it
         // cannot create, delete, or read itself
-        publisher.activateEvents(UPDATE)
+        publisher.activateEvents(MUTATE)
     }
 
     /**
@@ -64,18 +63,18 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
     override var lastDateModified: LocalDateTime = LocalDateTime.now()
         protected set
 
-    override val changes: SharedFlow<EntityChangeEvent<K, R>> = publisher.changes
+    override val changes: SharedFlow<MutationEvent<K, R>> = publisher.changes
 
-    override fun emitAsync(event: EntityChangeEvent<K, R>) = publisher.emitAsync(event)
+    override fun emitAsync(event: MutationEvent<K, R>) = publisher.emitAsync(event)
 
-    override fun subscribe(action: suspend (EntityChangeEvent<K, R>) -> Unit):
-        TransEventSubscription<in TransEntity, CrudEvent.Type, EntityChangeEvent<K, R>> = publisher.subscribe(action)
+    override fun subscribe(action: suspend (MutationEvent<K, R>) -> Unit):
+        TransEventSubscription<in TransEntity, MutationEvent.Type, MutationEvent<K, R>> = publisher.subscribe(action)
 
-    override fun subscribe(subscriber: Flow.Subscriber<in EntityChangeEvent<K, R>>?) = publisher.subscribe(subscriber)
+    override fun subscribe(subscriber: Flow.Subscriber<in MutationEvent<K, R>>?) = publisher.subscribe(subscriber)
 
-    override fun subscribe(vararg eventTypes: CrudEvent.Type, action: Consumer<in EntityChangeEvent<K, R>>):
-        TransEventSubscription<in R, CrudEvent.Type, EntityChangeEvent<K, R>> {
-        require(UPDATE in eventTypes) {
+    override fun subscribe(vararg eventTypes: MutationEvent.Type, action: Consumer<in MutationEvent<K, R>>):
+        TransEventSubscription<in R, MutationEvent.Type, MutationEvent<K, R>> {
+        require(MUTATE in eventTypes) {
             throw IllegalArgumentException("Only UPDATE event is supported for reactive entities")
         }
         return subscribe(action::accept)
@@ -98,20 +97,20 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
      */
     @Suppress("UNCHECKED_CAST")
     @JvmOverloads
-    protected fun <T> mutateAndPublish(newValue: T, oldValue: T, propertySetAction: Consumer<T> = Consumer { }) {
+    protected fun <T> mutateAndPublish(newValue: T, oldValue: T, propertySetAction: (T) -> Unit = {}) {
         if (newValue != oldValue) {
             val entityBeforeChange = clone()
-            propertySetAction.accept(newValue)
+            propertySetAction(newValue)
             lastDateModified = LocalDateTime.now()
             log.trace { "Firing entity update event from $entityBeforeChange to $this" }
-            publisher.emitAsync(Update(this, entityBeforeChange) as EntityChangeEvent<K, R>)
+            publisher.emitAsync(ReactiveMutationEvent(this as R, entityBeforeChange as R))
         }
     }
 
     @Suppress("UNCHECKED_CAST")
-    protected fun mutateAndPublish(mutationAction: Runnable) {
+    protected fun <T> mutateAndPublish(mutationAction: () -> T): T {
         val entityBeforeChange = clone()
-        mutationAction.run()
+        val result = mutationAction()
         if (entityBeforeChange == this) {
             log.warn {
                 "Attempt to publish update event from a mutation when object comparison was false. " +
@@ -120,7 +119,8 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
         } else {
             lastDateModified = LocalDateTime.now()
             log.trace { "Firing entity update event from $entityBeforeChange to $this" }
-            publisher.emitAsync(Update(this, entityBeforeChange) as EntityChangeEvent<K, R>)
+            publisher.emitAsync(ReactiveMutationEvent(this as R, entityBeforeChange as R))
         }
+        return result
     }
 }

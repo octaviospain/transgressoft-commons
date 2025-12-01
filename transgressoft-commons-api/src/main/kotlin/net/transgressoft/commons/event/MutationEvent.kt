@@ -17,21 +17,26 @@
 
 package net.transgressoft.commons.event
 
-import net.transgressoft.commons.entity.IdentifiableEntity
+import net.transgressoft.commons.entity.ReactiveEntity
 
 /**
- * Represents a [net.transgressoft.commons.event.CrudEvent] that tracks changes to entities by maintaining both
- * the current state and the previous state of affected entities.
+ * Represents a [TransEvent] that tracks a change from a [ReactiveEntity] by keeping both
+ * the current state and the previous state.
  *
  * This event type is particularly useful for update operations where understanding
  * what changed between states is important for subscribers. It allows subscribers
  * to react to specific field changes or state transitions rather than just the
  * final state.
  *
- * @param K the type of the [IdentifiableEntity] objects' id, which must be [Comparable]
- * @param T the type of the [IdentifiableEntity] objects
+ * @param K the type of the [ReactiveEntity] objects' id, which must be [Comparable]
+ * @param R the type of the [ReactiveEntity] objects
  */
-interface EntityChangeEvent<K, out T : IdentifiableEntity<K>> : CrudEvent<K, T> where K : Comparable<K> {
+interface MutationEvent<K, R : ReactiveEntity<K, R>> : TransEvent<MutationEvent.Type> where K: Comparable<K> {
 
-    val oldEntities: Map<K, T>
+    enum class Type(override val code: Int): EventType {
+        MUTATE(301)
+    }
+
+    val newEntity: R
+    val oldEntity: R
 }

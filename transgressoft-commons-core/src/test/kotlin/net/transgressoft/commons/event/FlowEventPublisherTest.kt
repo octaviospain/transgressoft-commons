@@ -81,6 +81,39 @@ class FlowEventPublisherTest : StringSpec({
         subscription.cancel()
     }
 
+    "ReactiveEntity emits change event when mutating a non public instance variable via method" {
+        val entity = TestEntity(UUID.randomUUID().toString())
+        val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
+
+        entity.subscribe { event ->
+            receivedEvents.add(event)
+        }
+
+        entity.addFriendAddress("John", "Apple avenue")
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        receivedEvents.size shouldBe 1
+        val event = receivedEvents[0]
+        event.entities[entity.id]?.getAddress("John") shouldBe "Apple avenue"
+        event.oldEntities[entity.id]?.getAddress("John") shouldBe null
+    }
+
+    "ReactiveEntity does not emit change event when mutating an incorrectly managed property via method" {
+        val entity = TestEntity(UUID.randomUUID().toString())
+        val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
+
+        entity.subscribe { event ->
+            receivedEvents.add(event)
+        }
+
+        entity.addUnmanagedProperty("John", "Apple avenue")
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        receivedEvents.size shouldBe 0
+    }
+
     "ReactiveEntity does not emit change event when property is set to its current value" {
         val entity = TestEntity(UUID.randomUUID().toString())
         val receivedEvents = mutableListOf<EntityChangeEvent<String, TestEntity>>()
@@ -527,6 +560,11 @@ class FlowEventPublisherTest : StringSpec({
 })
 
 class TestEntity(override val id: String) : ReactiveEntityBase<String, TestEntity>(FlowEventPublisher(id)) {
+
+    private val addressBook = mutableMapOf<String, String>()
+
+    private val nonManagedProperty = mutableMapOf<String, String>()
+
     var name: String = "Initial Name"
         set(value) {
             setAndNotify(value, field) { field = it }
@@ -539,11 +577,41 @@ class TestEntity(override val id: String) : ReactiveEntityBase<String, TestEntit
             setAndNotify(value, field) { field = it }
         }
 
+    fun addFriendAddress(name: String, address: String) {
+        mutateAndPublish {
+            addressBook[name] = address
+        }
+    }
+
+    fun addUnmanagedProperty(name: String, address: String) {
+        mutateAndPublish {
+            nonManagedProperty[name] = address
+        }
+    }
+
+    fun getAddress(name: String) = addressBook[name]
+
     override fun clone(): TestEntity {
         val clone = TestEntity(id)
         clone.name = this.name
         clone.description = this.description
         return clone
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as TestEntity
+        if (name != other.name) return false
+        if (description != other.description) return false
+        return addressBook == other.addressBook
+    }
+
+    override fun hashCode(): Int {
+        var result = name.hashCode()
+        result = 31 * result + description.hashCode()
+        result = 31 * result + addressBook.hashCode()
+        return result
     }
 
     override fun toString(): String = "TestEntity(id=$id, name=$name, description=$description)"

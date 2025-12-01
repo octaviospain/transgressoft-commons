@@ -87,8 +87,8 @@ Any object can become reactive by implementing the `ReactiveEntity` interface, t
 data class Person(override val id: Int, var name: String) : ReactiveEntityBase<Int, Person>() {
     var salary: Double = 0.0
         set(value) {
-            // setAndNotify handles the notification logic
-            setAndNotify(value, field) { field = it }
+            // mutateAndPublish handles the notification logic
+            mutateAndPublish(value, field) { field = it }
         }
 
     override val uniqueId: String = "person-$id"

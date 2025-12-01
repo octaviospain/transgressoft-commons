@@ -40,11 +40,11 @@ abstract class ReactivePrimitiveWrapper<R : ReactivePrimitiveWrapper<R, V>, V : 
      * The current value of this reactive primitive.
      *
      * When this property is modified, subscribers will be notified of the change.
-     * The implementation uses [setAndNotify] to track changes and trigger events.
+     * The implementation uses [mutateAndPublish] to track changes and trigger events.
      */
     override var value: V? = initialValue
         set(value) {
-            setAndNotify(value, field) {
+            mutateAndPublish(value, field) {
                 field = value
             }
         }

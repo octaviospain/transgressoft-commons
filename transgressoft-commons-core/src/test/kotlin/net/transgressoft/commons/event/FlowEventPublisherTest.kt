@@ -567,14 +567,14 @@ class TestEntity(override val id: String) : ReactiveEntityBase<String, TestEntit
 
     var name: String = "Initial Name"
         set(value) {
-            setAndNotify(value, field) { field = it }
+            mutateAndPublish(value, field) { field = it }
         }
 
     override val uniqueId = "$id-$name"
 
     var description: String = "Initial Description"
         set(value) {
-            setAndNotify(value, field) { field = it }
+            mutateAndPublish(value, field) { field = it }
         }
 
     fun addFriendAddress(name: String, address: String) {

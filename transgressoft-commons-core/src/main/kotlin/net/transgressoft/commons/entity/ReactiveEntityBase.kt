@@ -59,7 +59,7 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
 
     /**
      * The timestamp when this entity was last modified.
-     * Automatically updated whenever a property is changed via [setAndNotify].
+     * Automatically updated whenever a property is changed via [mutateAndPublish].
      */
     override var lastDateModified: LocalDateTime = LocalDateTime.now()
         protected set
@@ -98,7 +98,7 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
      */
     @Suppress("UNCHECKED_CAST")
     @JvmOverloads
-    protected fun <T> setAndNotify(newValue: T, oldValue: T, propertySetAction: Consumer<T> = Consumer { }) {
+    protected fun <T> mutateAndPublish(newValue: T, oldValue: T, propertySetAction: Consumer<T> = Consumer { }) {
         if (newValue != oldValue) {
             val entityBeforeChange = clone()
             propertySetAction.accept(newValue)

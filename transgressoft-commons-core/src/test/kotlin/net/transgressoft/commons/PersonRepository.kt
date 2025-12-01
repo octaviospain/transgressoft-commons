@@ -57,7 +57,7 @@ data class Person(
     override var name: String? = initialName
         get() = initialName
         set(value) {
-            setAndNotify(value, field) { initialName = value }
+            mutateAndPublish(value, field) { initialName = value }
         }
 
     override val uniqueId: String

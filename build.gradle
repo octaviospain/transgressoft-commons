@@ -47,7 +47,7 @@ scmVersion {
     versionIncrementer 'incrementMinor'
 }
 
-tasks.withType(PublishToMavenLocal) {
+tasks.withType(PublishToMavenLocal).configureEach {
     onlyIf { project != rootProject }
 }
 

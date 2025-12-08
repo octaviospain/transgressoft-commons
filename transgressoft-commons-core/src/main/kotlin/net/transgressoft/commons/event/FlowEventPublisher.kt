@@ -31,6 +31,70 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
+ * Configuration for FlowEventPublisher behavior.
+ *
+ * The defaults are suitable for most use cases. Only modify these if you
+ * understand the implications.
+ *
+ * @property replay Number of events to replay to new subscribers. Default 0 means
+ *   new subscribers only see events after they subscribe.
+ * @property extraBufferCapacity Buffer size for events when subscribers are slow.
+ *   Larger values use more memory but handle burst traffic better.
+ * @property onBufferOverflow What happens when buffer is full:
+ *   - SUSPEND (default): Emitter waits - guarantees delivery but can slow producers
+ *   - DROP_OLDEST: Drops old events - never blocks but may lose events
+ *   - DROP_LATEST: Drops new events - never blocks but may lose events
+ */
+data class PublisherConfig(
+    val replay: Int = 0,
+    val extraBufferCapacity: Int = 5120,
+    val onBufferOverflow: BufferOverflow = BufferOverflow.SUSPEND
+) {
+    init {
+        require(replay >= 0) { "replay must be non-negative" }
+        require(extraBufferCapacity >= 0) { "extraBufferCapacity must be non-negative" }
+    }
+
+    companion object {
+        /** Default configuration suitable for most use cases */
+        val DEFAULT = PublisherConfig()
+
+        /**
+         * Configuration optimized for real-time scenarios where freshness
+         * matters more than completeness. Never blocks the emitter.
+         */
+        val REAL_TIME =
+            PublisherConfig(
+                replay = 0,
+                extraBufferCapacity = 64,
+                onBufferOverflow = BufferOverflow.DROP_OLDEST
+            )
+
+        /**
+         * Configuration for memory-constrained environments.
+         * Smaller buffer, suspends on overflow.
+         */
+        val LOW_MEMORY =
+            PublisherConfig(
+                replay = 0,
+                extraBufferCapacity = 128,
+                onBufferOverflow = BufferOverflow.SUSPEND
+            )
+
+        /**
+         * Configuration that replays the last event to new subscribers.
+         * Useful when subscribers need to know the current state on the subscription.
+         */
+        fun withReplay(count: Int = 1) =
+            PublisherConfig(
+                replay = count,
+                extraBufferCapacity = 5120,
+                onBufferOverflow = BufferOverflow.SUSPEND
+            )
+    }
+}
+
+/**
  * Class that provides reactive event publishing capabilities using Kotlin coroutine flows.
  *
  * `FlowEventPublisher` implements the core functionality needed for reactive programming by:
@@ -52,7 +116,11 @@ import kotlinx.coroutines.launch
  * @see [TransEventPublisher]
  * @see [SharedFlow]
  */
-class FlowEventPublisher<ET : EventType, E: TransEvent<ET>>(id: String): TransEventPublisher<ET, E> {
+class FlowEventPublisher<ET : EventType, E: TransEvent<ET>>(
+    id: String,
+    // SharedFlow for entity change events with sufficient buffer and SUSPEND policy to ensure no events are lost
+    config: PublisherConfig = PublisherConfig.DEFAULT
+): TransEventPublisher<ET, E> {
 
     private val log = KotlinLogging.logger {}
 
@@ -69,16 +137,7 @@ class FlowEventPublisher<ET : EventType, E: TransEvent<ET>>(id: String): TransEv
      */
     private val eventChannel = Channel<E>(Channel.UNLIMITED)
 
-    // SharedFlow for entity change events with sufficient buffer and SUSPEND policy to ensure no events are lost
-    private val changesFlow =
-        MutableSharedFlow<E>(
-            // Increasing this enables an 'object history' by replayed events. TBD
-            replay = 0,
-            // Larger buffer to handle bursts
-            extraBufferCapacity = 5120,
-            // Block until buffer space is available
-            onBufferOverflow = BufferOverflow.SUSPEND
-        )
+    private val changesFlow = MutableSharedFlow<E>(config.replay, config.extraBufferCapacity, config.onBufferOverflow)
 
     override val changes: SharedFlow<E> = changesFlow.asSharedFlow()
 

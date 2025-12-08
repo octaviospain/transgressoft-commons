@@ -558,6 +558,93 @@ class FlowEventPublisherTest : StringSpec({
             Update(mapOf(entity1.id to entity1), mapOf(entity2.id to oldEntity2))
         }.message shouldContain "consistent"
     }
+
+    "FlowEventPublisher can be configured with REAL_TIME config" {
+        val publisher =
+            FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>(
+                "RealTimePublisher",
+                PublisherConfig.REAL_TIME
+            ).apply {
+                activateEvents(CREATE)
+            }
+
+        val receivedEvents = mutableListOf<CrudEvent<String, TestEntity>>()
+        val subscription = publisher.subscribe { receivedEvents.add(it) }
+
+        val entity = TestEntity(UUID.randomUUID().toString())
+        publisher.emitAsync(Create(entity))
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        receivedEvents.size shouldBe 1
+        receivedEvents[0].entities.values.first().id shouldBe entity.id
+
+        subscription.cancel()
+    }
+
+    "FlowEventPublisher can be configured with LOW_MEMORY config" {
+        val publisher =
+            FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>(
+                "LowMemoryPublisher",
+                PublisherConfig.LOW_MEMORY
+            ).apply {
+                activateEvents(CREATE)
+            }
+
+        val receivedEvents = mutableListOf<CrudEvent<String, TestEntity>>()
+        val subscription = publisher.subscribe { receivedEvents.add(it) }
+
+        val entity = TestEntity(UUID.randomUUID().toString())
+        publisher.emitAsync(Create(entity))
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        receivedEvents.size shouldBe 1
+        receivedEvents[0].entities.values.first().id shouldBe entity.id
+
+        subscription.cancel()
+    }
+
+    "FlowEventPublisher with replay config delivers historical events to late subscribers" {
+        val replayCount = 3
+        val publisher =
+            FlowEventPublisher<CrudEvent.Type, CrudEvent<String, TestEntity>>(
+                "ReplayPublisher",
+                PublisherConfig.withReplay(replayCount)
+            ).apply {
+                activateEvents(CREATE)
+            }
+
+        // Emit events before any subscriber exists
+        val earlyEntities = List(5) { i -> TestEntity("early-entity-$i") }
+        earlyEntities.forEach { entity ->
+            publisher.emitAsync(Create(entity))
+        }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Late subscriber should receive the last 3 events (replay count)
+        val lateSubscriberEvents = mutableListOf<CrudEvent<String, TestEntity>>()
+        val lateSubscription = publisher.subscribe { lateSubscriberEvents.add(it) }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Should have received the replayed events
+        lateSubscriberEvents.size shouldBe replayCount
+        lateSubscriberEvents[0].entities.values.first().id shouldBe "early-entity-2"
+        lateSubscriberEvents[1].entities.values.first().id shouldBe "early-entity-3"
+        lateSubscriberEvents[2].entities.values.first().id shouldBe "early-entity-4"
+
+        // New events should also be received
+        val newEntity = TestEntity("new-entity")
+        publisher.emitAsync(Create(newEntity))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        lateSubscriberEvents.size shouldBe replayCount + 1
+        lateSubscriberEvents.last().entities.values.first().id shouldBe newEntity.id
+
+        lateSubscription.cancel()
+    }
 })
 
 class TestEntity(override val id: String) : ReactiveEntityBase<String, TestEntity>(FlowEventPublisher(id)) {

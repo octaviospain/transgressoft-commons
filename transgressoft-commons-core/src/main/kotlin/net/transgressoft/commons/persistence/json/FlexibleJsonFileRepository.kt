@@ -55,10 +55,10 @@ import kotlinx.serialization.json.put
  * ```
  * val config = FlexibleJsonFileRepository(File("config.json"))
  *
- * // Create reactive primitives
- * val serverName = config.createReactiveString("server.name", "Main Server")
- * val port = config.createReactiveInt("server.port", 8080)
- * val debugMode = config.createReactiveBoolean("debug.mode", false)
+ * // Get or create reactive primitives (uses existing values from file if present)
+ * val serverName = config.getReactiveString("server.name", "Main Server")
+ * val port = config.getReactiveInt("server.port", 8080)
+ * val debugMode = config.getReactiveBoolean("debug.mode", false)
  *
  * // Later, change a value (automatically persisted)
  * port.value = 9090
@@ -75,11 +75,75 @@ open class FlexibleJsonFileRepository(jsonFile: File) :
         jsonFile,
         ReactiveValueMapSerializer
     ) {
-    fun createReactiveString(id: String, value: String) = ReactiveString(id, value).also { add(it as ReactivePrimitive<Any>) }
 
-    fun createReactiveBoolean(id: String, value: Boolean) = ReactiveBoolean(id, value).also { add(it as ReactivePrimitive<Any>) }
+    /**
+     * Gets an existing reactive string or creates a new one if it doesn't exist.
+     *
+     * This method implements createOrGet semantics: if a reactive string with the given ID
+     * already exists in the repository (e.g., loaded from the JSON file), it returns the
+     * existing instance with its current value. Otherwise, it creates a new reactive string
+     * with the provided default value and adds it to the repository.
+     *
+     * @param id The unique identifier for the reactive string
+     * @param value The default value to use if creating a new reactive string.
+     *
+     * @return The existing [ReactiveString] if found, or a newly created one with the default value
+     */
+    @JvmOverloads
+    fun getReactiveString(id: String, value: String? = null): ReactiveString {
+        val existing = findById(id)
+        return if (existing.isPresent) {
+            existing.get() as ReactiveString
+        } else {
+            ReactiveString(id, value).also { add(it as ReactivePrimitive<Any>) }
+        }
+    }
 
-    fun createReactiveInt(id: String, value: Int) = ReactiveInt(id, value).also { add(it as ReactivePrimitive<Any>) }
+    /**
+     * Gets an existing reactive boolean or creates a new one if it doesn't exist.
+     *
+     * This method implements createOrGet semantics: if a reactive boolean with the given ID
+     * already exists in the repository (e.g., loaded from the JSON file), it returns the
+     * existing instance with its current value. Otherwise, it creates a new reactive boolean
+     * with the provided default value and adds it to the repository.
+     *
+     * @param id The unique identifier for the reactive boolean
+     * @param value The default value to use if creating a new reactive boolean.
+     *
+     * @return The existing [ReactiveBoolean] if found, or a newly created one with the default value
+     */
+    @JvmOverloads
+    fun getReactiveBoolean(id: String, value: Boolean? = null): ReactiveBoolean {
+        val existing = findById(id)
+        return if (existing.isPresent) {
+            existing.get() as ReactiveBoolean
+        } else {
+            ReactiveBoolean(id, value).also { add(it as ReactivePrimitive<Any>) }
+        }
+    }
+
+    /**
+     * Gets an existing reactive integer or creates a new one if it doesn't exist.
+     *
+     * This method implements createOrGet semantics: if a reactive integer with the given ID
+     * already exists in the repository (e.g., loaded from the JSON file), it returns the
+     * existing instance with its current value. Otherwise, it creates a new reactive integer
+     * with the provided default value and adds it to the repository.
+     *
+     * @param id The unique identifier for the reactive integer
+     * @param value The default value to use if creating a new reactive integer.
+     *
+     * @return The existing [ReactiveInt] if found, or a newly created one with the default value
+     */
+    @JvmOverloads
+    fun getReactiveInt(id: String, value: Int? = null): ReactiveInt {
+        val existing = findById(id)
+        return if (existing.isPresent) {
+            existing.get() as ReactiveInt
+        } else {
+            ReactiveInt(id, value).also { add(it as ReactivePrimitive<Any>) }
+        }
+    }
 }
 
 object ReactiveValueMapSerializer : KSerializer<Map<String, ReactivePrimitive<Any>>> {

@@ -27,9 +27,9 @@ class FlexibleJsonFileRepositoryTest : StringSpec({
 
     "Repository should create and serialize strings, booleans and integers" {
         repository = FlexibleJsonFileRepository(jsonFile)
-        val reactiveString = repository.createReactiveString("id1", "value1")
-        val reactiveBoolean = repository.createReactiveBoolean("id2", true)
-        val reactiveInt = repository.createReactiveInt("id3", 3)
+        val reactiveString = repository.getReactiveString("id1", "value1")
+        val reactiveBoolean = repository.getReactiveBoolean("id2", true)
+        val reactiveInt = repository.getReactiveInt("id3", 3)
 
         repository.contains(reactiveString.id) shouldBe true
         repository.findByUniqueId(reactiveBoolean.uniqueId) shouldBePresent { it shouldBe reactiveBoolean }
@@ -62,5 +62,48 @@ class FlexibleJsonFileRepositoryTest : StringSpec({
         repository.contains("property.1") shouldBe true
         repository.findByUniqueId("has_value-true") shouldBePresent { it.value shouldBe true }
         repository.findFirst { it.value == 3 } shouldBePresent { it.id shouldBe "number_of" }
+    }
+
+    "createReactiveX methods should return existing values from file, not overwrite with defaults" {
+        jsonFile.writeText(
+            """
+            {
+                "server.name": "Production Server",
+                "server.port": 9000,
+                "debug.mode": true
+            }"""
+        )
+
+        val repository = FlexibleJsonFileRepository(jsonFile)
+
+        repository.contains("server.name") shouldBe true
+        repository.contains("server.port") shouldBe true
+        repository.contains("debug.mode") shouldBe true
+
+        // When we call createReactiveX with different default values,
+        // it should return the EXISTING values from the file, not the defaults
+        val serverName = repository.getReactiveString("server.name", "Default Server")
+        val serverPort = repository.getReactiveInt("server.port", 8080)
+        val debugMode = repository.getReactiveBoolean("debug.mode", false)
+
+        // These should have the values from the file
+        serverName.value shouldBe "Production Server"
+        serverPort.value shouldBe 9000
+        debugMode.value shouldBe true
+
+        // Changing values should persist to file
+        serverPort.value = 9090
+
+        eventually(500.milliseconds) {
+            val updatedContent = jsonFile.readText()
+            updatedContent.shouldEqualJson(
+                """
+                {
+                    "server.name": "Production Server",
+                    "server.port": 9090,
+                    "debug.mode": true
+                }"""
+            )
+        }
     }
 })

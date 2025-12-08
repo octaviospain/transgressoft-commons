@@ -182,9 +182,9 @@ class JavaInteroperabilityTest {
         var configRepository = new FlexibleJsonFileRepository(configFile);
         
         // Create reactive primitives in the repository
-        var serverName = configRepository.createReactiveString("server.name", "MainServer");
-        var maxConnections = configRepository.createReactiveInt("max.connections", 100);
-        var debugMode = configRepository.createReactiveBoolean("debug.mode", false);
+        var serverName = configRepository.getReactiveString("server.name", "MainServer");
+        var maxConnections = configRepository.getReactiveInt("max.connections", 100);
+        var debugMode = configRepository.getReactiveBoolean("debug.mode", false);
         
         assertEquals("MainServer", serverName.getValue());
         assertEquals(100, maxConnections.getValue());

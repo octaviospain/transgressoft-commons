@@ -118,3 +118,5 @@ ktlint_standard_colon-spacing = disabled
 ktlint_standard_class-signature = disabled
 ktlint_standard_multiline-expression-wrapping = enabled
 ktlint_standard_argument-list-wrapping = disabled
+ktlint_standard_backing-property-naming = disabled
+ktlint_standard_kdoc = disabled

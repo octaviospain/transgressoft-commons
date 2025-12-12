@@ -94,57 +94,72 @@ data class Person(override val id: Int, var name: String) : ReactiveEntityBase<I
     override val uniqueId: String = "person-$id"
     override fun clone(): Person = copy()
 }
-
-// Create a person and subscribe to changes using a Consumer
-val person: ReactiveEntity<Int, Person> = Person(1, "Alice")
-val subscription = person.subscribe { event ->
-    val entity = event.entities.values.first()
-    val oldEntity = event.oldEntities.values.first()
-    println("Salary updated from ${oldEntity.salary} to ${entity.salary}")
-}
-
-// Changes trigger notifications
-person.salary = 75000.0
-// Output: Salary updated from 0.0 to 75000.0
 ```
 
-### Repository Subscriptions
+### Two Subscription Patterns
 
-Repositories manage collections of entities while maintaining the reactive behavior:
+The library provides **two distinct ways** to observe changes, each optimized for different use cases:
+
+#### 1. Repository-Level Subscriptions (Collection Changes)
+
+**Use this when:** You want to observe all entities of a type - additions, removals, or any entity modifications in the collection.
+
+**Best for:** Dashboards, search indexers, cache invalidators, audit logs, UI lists showing "all items".
 
 ```kotlin
-// Create a repository for Person entities
-val repository: Repository<Int, Person> = VolatileRepository<Int, Person>("PersonRepository")
+val repository: Repository<Int, Person> = VolatileRepository("PersonRepository")
 
-// Subscribe to CRUD events with lambda functions
-val createSubscription = repository.subscribe(StandardCrudEvent.Type.CREATE) { event ->
-    println("Entities created: ${event.entities.values}")
+// Subscribe to CRUD events - fires for ANY entity in the collection
+repository.subscribe(CrudEvent.Type.CREATE) { event ->
+    println("New persons added: ${event.entities.values}")
 }
 
-val updateSubscription = repository.subscribe(StandardCrudEvent.Type.UPDATE) { event ->
-    val changeEvent = event as EntityChangeEvent<Int, Person>
-    println("Entities updated:")
-    changeEvent.entities.forEach { (id, entity) ->
-        val oldEntity = changeEvent.oldEntities[id]
-        println("  $id: $oldEntity -> $entity")
-    }
+repository.subscribe(CrudEvent.Type.UPDATE) { event ->
+    println("Persons modified: ${event.entities.values}")
 }
 
-val deleteSubscription = repository.subscribe(StandardCrudEvent.Type.DELETE) { event ->
-    println("Entities deleted: ${event.entities.values}")
+repository.subscribe(CrudEvent.Type.DELETE) { event ->
+    println("Persons removed: ${event.entities.values}")
 }
 
-// Repository operations trigger events
+// Adding entities triggers CREATE events
 repository.add(Person(1, "Alice"))
-// Output: Entities created: [Person(id=1, name=Alice)]
+// Output: New persons added: [Person(id=1, name=Alice)]
 
-// Entity changes are propagated through the repository
+// Modifying through repository triggers UPDATE events
 repository.runForSingle(1) { person ->
     person.salary = 80000.0
 }
-// Output: Entities updated:
-//   1: Person(id=1, name=Alice, salary=0.0) -> Person(id=1, name=Alice, salary=80000.0)
+// Output: Persons modified: [Person(id=1, name=Alice, salary=80000.0)]
 ```
+
+**Memory efficiency:** Repository publishers are created once per collection, regardless of entity count. Observing 10,000 entities requires only **one subscription**.
+
+#### 2. Entity-Level Subscriptions (Specific Entity Mutations)
+
+**Use this when:** You want to observe a specific entity instance – only its property changes.
+
+**Best for:** Detail views, form bindings, real-time updates for a specific item, entity-specific validations.
+
+```kotlin
+val person = Person(1, "Alice")
+
+// Subscribe to THIS SPECIFIC person's property changes
+val subscription = person.subscribe { event ->
+    val newEntity = event.newEntity
+    val oldEntity = event.oldEntity
+    println("Person ${newEntity.id} changed: ${oldEntity.salary} → ${newEntity.salary}")
+}
+
+// Direct property changes trigger notifications
+person.salary = 75000.0
+// Output: Person 1 changed: 0.0 → 75000.0
+
+// Unsubscribe when no longer needed
+subscription.cancel()
+```
+
+**Memory efficiency:** Entity publishers use **lazy initialization** – they're only created when someone subscribes. Entities without subscribers have zero reactive overhead.
 
 ### Extensibility
 
@@ -281,45 +296,44 @@ appName.setValue("NewAppName");
 subscription.cancel();
 ```
 
-#### 2. Working with Reactive Entities in Java
-
-```java
-// Use an existing Kotlin-defined reactive entity class
-// This example uses the Person class which implements ReactiveEntityBase
-var person = new Person(1, "Alice", 0L, true);
-
-// Subscribe to changes
-var subscription = person.subscribe(event -> {
-    var newPerson = event.getEntities().values().iterator().next();
-    var oldPerson = event.getOldEntities().values().iterator().next();
-    System.out.println("Name changed from " + oldPerson.getName() + " to " + newPerson.getName());
-});
-
-// Changes trigger notifications
-person.setName("John");
-// Output: Name changed from Alice to John
-
-subscription.cancel();
-```
-
-#### 3. Using Repository Subscriptions in Java
+#### 2. Repository-Level Subscriptions in Java (All Entities)
 
 ```java
 // Create a repository for Person entities
-var repository = new VolatileRepository<Int, Person>();
+var repository = new VolatileRepository<Integer, Person>("PersonRepository");
 
-// Subscribe to all events from the repository
-var subscription = repository.subscribe(event -> {
-    System.out.println("Entities affected: " + event.getEntities().values());
+// Subscribe to observe ALL persons in the collection
+var subscription = repository.subscribe(CrudEvent.Type.UPDATE, event -> {
+    System.out.println("Persons modified: " + event.getEntities().values());
 });
 
 // Repository operations trigger events
 repository.add(new Person(1, "Alice", 0L, true));
-// Output: Entities affected: [Person(id=1, name=Alice, money=0, morals=true)]
 
-// Entity changes are propagated through the repository
+// Modify through repository - fires UPDATE event
 repository.runForSingle(1, person -> person.setName("John"));
-// Output: Entities affected: [Person(id=1, name=John, money=0, morals=true)]
+// Output: Persons modified: [Person(id=1, name=John, money=0, morals=true)]
+
+subscription.cancel();
+```
+
+#### 3. Entity-Level Subscriptions in Java (Specific Entity)
+
+```java
+// Get or create a specific person
+var person = new Person(1, "Alice", 0L, true);
+
+// Subscribe to THIS SPECIFIC person's changes
+var subscription = person.subscribe(event -> {
+    var newPerson = event.getNewEntity();
+    var oldPerson = event.getOldEntity();
+    System.out.println("Person " + newPerson.getId() + " changed: " +
+                       oldPerson.getName() + " → " + newPerson.getName());
+});
+
+// Direct property changes trigger notifications
+person.setName("John");
+// Output: Person 1 changed: Alice → John
 
 subscription.cancel();
 ```

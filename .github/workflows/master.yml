@@ -19,10 +19,13 @@ jobs:
                     fetch-depth: 0
 
             -   name: Setup Git Credentials
+                env:
+                    PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+                    REPO: ${{ github.repository }}
                 run: |
                     git config --global user.email "github-actions@github.com"
                     git config --global user.name "github-actions"
-                    git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
+                    git remote set-url origin "https://x-access-token:$PAT_TOKEN@github.com/$REPO.git"
 
             -   name: Set up JDK 17
                 uses: actions/setup-java@v4

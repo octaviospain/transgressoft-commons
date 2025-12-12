@@ -1,7 +1,6 @@
 package net.transgressoft.commons
 
 import net.transgressoft.commons.entity.ReactiveEntityBase
-import net.transgressoft.commons.event.FlowEventPublisher
 import net.transgressoft.commons.persistence.json.JsonFileRepository
 import java.io.File
 import kotlinx.serialization.SerialName
@@ -26,7 +25,7 @@ data class Man(
     override var name: String?,
     override val money: Long?,
     override val beard: Boolean = false
-) : Manly, ReactiveEntityBase<Int, Manly>(FlowEventPublisher("$id")) {
+) : Manly, ReactiveEntityBase<Int, Manly>("$id") {
     override val uniqueId: String = "$id-$name-$money"
 
     override fun clone(): Man = copy()

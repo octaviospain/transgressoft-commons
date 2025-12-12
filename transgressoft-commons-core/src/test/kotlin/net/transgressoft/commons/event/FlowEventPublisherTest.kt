@@ -647,7 +647,7 @@ class FlowEventPublisherTest : StringSpec({
     }
 })
 
-class TestEntity(override val id: String) : ReactiveEntityBase<String, TestEntity>(FlowEventPublisher(id)) {
+class TestEntity(override val id: String) : ReactiveEntityBase<String, TestEntity>(id) {
 
     private val addressBook = mutableMapOf<String, String>()
 

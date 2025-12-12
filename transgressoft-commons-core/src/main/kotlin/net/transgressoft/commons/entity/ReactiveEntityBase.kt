@@ -37,6 +37,11 @@ import kotlinx.coroutines.flow.SharedFlow
  * When properties of the entity change, all subscribers are automatically notified with both the updated
  * entity state and the previous state.
  *
+ * This implementation uses lazy initialization for the event publisher - the publisher infrastructure
+ * (channels, flows, and coroutines) is only created when the first subscriber registers. This significantly
+ * reduces memory overhead for entities that are never observed, which is especially beneficial in applications
+ * with thousands of reactive entities.
+ *
  * @param K The type of the entity's unique identifier, which must implement [Comparable]
  * @param R The concrete type of the reactive entity that extends this class
  *
@@ -44,17 +49,54 @@ import kotlinx.coroutines.flow.SharedFlow
  * @see MutationEvent
  */
 abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
-    private val publisher: TransEventPublisher<MutationEvent.Type, MutationEvent<K, R>>
+    private val publisherFactory: () -> TransEventPublisher<MutationEvent.Type, MutationEvent<K, R>>
 ) : ReactiveEntity<K, R> where K : Comparable<K> {
     private val log = KotlinLogging.logger {}
 
-    protected constructor() : this(FlowEventPublisher("ReactiveEntity"))
+    /**
+     * Convenience constructor that creates a default FlowEventPublisher with the entity's class name.
+     */
+    protected constructor() : this({ FlowEventPublisher("ReactiveEntity") })
 
-    init {
-        // A reactive entity only emits MUTATE events because it
-        // cannot create, delete, or read itself
-        publisher.activateEvents(MUTATE)
-    }
+    /**
+     * Convenience constructor that creates a default FlowEventPublisher with a custom name.
+     *
+     * @param entityName The name to use for the publisher (useful for debugging and logging)
+     */
+    protected constructor(entityName: String) : this({ FlowEventPublisher(entityName) })
+
+    /**
+     * The lazily initialized publisher. Only created when the first subscriber registers.
+     */
+    @Volatile
+    private var _publisher: TransEventPublisher<MutationEvent.Type, MutationEvent<K, R>>? = null
+
+    /**
+     * Gets the publisher, creating it lazily if needed. Thread-safe using double-checked locking.
+     */
+    private val publisher: TransEventPublisher<MutationEvent.Type, MutationEvent<K, R>>
+        get() =
+            _publisher ?: synchronized(this) {
+                _publisher ?: publisherFactory().also { newPublisher ->
+                    // A reactive entity only emits MUTATE events because it
+                    // cannot create, delete, or read itself
+                    newPublisher.activateEvents(MUTATE)
+                    _publisher = newPublisher
+                }
+            }
+
+    /**
+     * Determines whether events should be emitted. Returns true only if the publisher has been initialized,
+     * which happens when the first subscriber registers.
+     *
+     * For in-process publishers like FlowEventPublisher, this provides memory optimization by avoiding
+     * event emission for entities without subscribers.
+     *
+     * For distributed publishers (e.g., Kafka), once initialized, this will always return true since
+     * we cannot determine if remote consumers exist.
+     */
+    private val shouldEmit: Boolean
+        get() = _publisher != null
 
     /**
      * The timestamp when this entity was last modified.
@@ -63,7 +105,12 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
     override var lastDateModified: LocalDateTime = LocalDateTime.now()
         protected set
 
-    override val changes: SharedFlow<MutationEvent<K, R>> = publisher.changes
+    /**
+     * A flow of entity change events that collectors can observe.
+     * Accessing this property will trigger lazy initialization of the publisher.
+     */
+    override val changes: SharedFlow<MutationEvent<K, R>>
+        get() = publisher.changes
 
     override fun emitAsync(event: MutationEvent<K, R>) = publisher.emitAsync(event)
 
@@ -88,7 +135,7 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
      * 2. If different, captures the entity state before the change
      * 3. Applies the new value using the provided property setter
      * 4. Updates the last modified timestamp
-     * 5. Notifies all subscribers with both the updated and previous entity states
+     * 5. Notifies all subscribers with both the updated and previous entity states (only if the publisher is initialized)
      *
      * @param T The type of the property being modified
      * @param newValue The new value to set
@@ -102,8 +149,10 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
             val entityBeforeChange = clone()
             propertySetAction(newValue)
             lastDateModified = LocalDateTime.now()
-            log.trace { "Firing entity update event from $entityBeforeChange to $this" }
-            publisher.emitAsync(ReactiveMutationEvent(this as R, entityBeforeChange as R))
+            if (shouldEmit) {
+                log.trace { "Firing entity update event from $entityBeforeChange to $this" }
+                publisher.emitAsync(ReactiveMutationEvent(this as R, entityBeforeChange as R))
+            }
         }
     }
 
@@ -118,8 +167,10 @@ abstract class ReactiveEntityBase<K, R : ReactiveEntity<K, R>>(
             }
         } else {
             lastDateModified = LocalDateTime.now()
-            log.trace { "Firing entity update event from $entityBeforeChange to $this" }
-            publisher.emitAsync(ReactiveMutationEvent(this as R, entityBeforeChange as R))
+            if (shouldEmit) {
+                log.trace { "Firing entity update event from $entityBeforeChange to $this" }
+                publisher.emitAsync(ReactiveMutationEvent(this as R, entityBeforeChange as R))
+            }
         }
         return result
     }
